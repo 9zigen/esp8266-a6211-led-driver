@@ -1,0 +1,14 @@
+@charset "utf-8";
+@import "../../../node_modules/bulma/bulma.sass";
+
+.is-active > .navbar-icon {
+  color: $green
+}
+
+.title {
+  margin-top: 30px;
+}
+
+.text-left {
+  text-align: left;
+}
