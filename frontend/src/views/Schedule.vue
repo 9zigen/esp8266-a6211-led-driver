@@ -147,12 +147,6 @@ export default {
 
     }
   },
-  computed: {
-    // schedule () {
-    //   console.log(store.settings.schedule)
-    //   return store.settings.schedule
-    // }
-  },
   methods: {
     timeFormat (value) {
       let hour = parseInt(value / 60)

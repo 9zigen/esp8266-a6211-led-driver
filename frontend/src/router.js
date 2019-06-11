@@ -9,11 +9,6 @@ import EventBus from '@/eventBus'
 
 Vue.use(Router)
 
-function requireAuth (to, from, next) {
-  EventBus.$emit('getSettings')
-  next()
-}
-
 export default new Router({
   mode: 'history',
   base: process.env.BASE_URL,
@@ -25,6 +20,7 @@ export default new Router({
       component: Home,
       beforeEnter: (to, from, next) => {
         EventBus.$emit('getStatus')
+        console.log('getStatus')
         next()
       }
     },
