@@ -14,6 +14,7 @@ public:
 
   void init();
   void reloadSettings();
+  void connectSTA();
   void startSTA();
   void startAP();
   void stopAP();
@@ -21,7 +22,8 @@ public:
 
 private:
 
-  bool new_wifi_settings  = false;
+  bool new_wifi_settings = false;
+  bool new_mqtt_settings = false;
   bool check_wifi = false;
   Ticker connection_timer;
   uint8_t connect_timeout = 10;

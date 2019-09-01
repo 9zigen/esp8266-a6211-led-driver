@@ -14,6 +14,7 @@
 
 
 ESP8266WiFiMulti wifiMulti;
+Ticker reconnect_timer;
 WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
 
 void onSTAGotIP(const WiFiEventStationModeGotIP& event) {
@@ -27,14 +28,16 @@ void onSTAGotIP(const WiFiEventStationModeGotIP& event) {
 }
 
 void onSTADisconnect(const WiFiEventStationModeDisconnected& event) {
-  Serial.printf("[NETWORK] Wi-Fi Disconnected \n");
+  Serial.println("[NETWORK] Wi-Fi Disconnected");
   LED.setMode(THREE_SHORT_BLINK);
   NETWORK.isConnected = false;
-  NETWORK.startAP();
+
+  /* Scan and connect to best network */
+  NETWORK.connectSTA();
 }
 
 void NetworkClass::init() {
-  Serial.println("[NETWORK] WiFi First Time Connecting to AP...\r\n");
+  Serial.println("[NETWORK] WiFi First Time Connecting to AP...");
 
   /* Start STA Mode with saved credentials */
   startSTA();
@@ -47,24 +50,33 @@ void NetworkClass::init() {
 
 void NetworkClass::reloadSettings() {
   new_wifi_settings = true;
+  new_mqtt_settings = true;
   check_wifi = true;
 }
 
-/* check WiFi connection first 10 sec */
+/* check WiFi connection in loop */
 void NetworkClass::loop() {
 
   if (!check_wifi)
     return;
 
+  /* update MQTT client config */
+  if (new_mqtt_settings) {
+    new_mqtt_settings = false;
+    Serial.println("[NETWORK] MQTT New Settings Applied, connecting to Server...");
+    initMqtt();
+  }
+
   /* reconnect to AP requested */
   if (new_wifi_settings) {
     new_wifi_settings = false;
-    Serial.println("[NETWORK] WiFi New Settings Applied, connecting to AP...");
+    Serial.println("[NETWORK] WiFi New Settings Applied, checking...");
+
     startSTA();
-    return;
   }
 
-  /* If STA not connected in 10 sec */
+
+  /* If STA still not connected */
   if (wifiMulti.run() != WL_CONNECTED) {
     isConnected = false;
 
@@ -72,7 +84,7 @@ void NetworkClass::loop() {
       Serial.printf("[NETWORK] WiFi Connect Timeout. WiFi Mode: %d \n", WiFi.getMode());
 #endif
 
-    if (WiFi.getMode() != WIFI_AP_STA) {
+    if (WiFi.getMode() != WIFI_AP) {
       /* start AP */
       startAP();
     }
@@ -89,10 +101,19 @@ void NetworkClass::tik() {
   check_wifi = true;
 }
 
+void NetworkClass::connectSTA() {
+  /* Scan and connect to best WiFi network */
+  if (wifiMulti.run() != WL_CONNECTED) {
+
+    /* Wait 1000 msec to establish connection */
+    connection_timer.once(10, std::bind(&NetworkClass::tik, this));
+  }
+}
+
+
 void NetworkClass::startSTA() {
   /* Disable store WiFi config in SDK flash area */
   WiFi.persistent(false);
-  WiFi.disconnect(false);
 
   /* Start WiFi in Station mode */
   WiFi.mode(WIFI_STA);
@@ -112,12 +133,7 @@ void NetworkClass::startSTA() {
   }
 
   /* Scan and connect to best WiFi network */
-  if (wifiMulti.run() != WL_CONNECTED) {
-
-    /* Wait 200 msec to establish connection */
-    connection_timer.once_ms(200, std::bind(&NetworkClass::tik, this));
-  }
-
+  connectSTA();
 
 }
 
@@ -126,13 +142,13 @@ void NetworkClass::startAP() {
     Serial.println("[NETWORK] WiFi Starting AP.");
 #endif
 
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.disconnect(false);
+  WiFi.mode(WIFI_AP);
 
   services_t * services = CONFIG.getService();
   auth_t * auth = CONFIG.getAuth();
 
   /* Start AP */
-  WiFi.disconnect();
   WiFi.softAP(services->hostname, auth->password);
 
 #ifdef DEBUG_NETWORK

@@ -73,27 +73,27 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
             /* reboot */
             ESP.restart();
 
-          } else if (strncmp(command, "getStatus", 9) == 0) {      /* Status */
+          } else if (strncmp(command, "getStatus", 9) == 0) {      /* Get Status */
             WEBUI.statusJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getSchedule", 11) == 0) {   /* Schedule */
+          } else if (strncmp(command, "getSchedule", 11) == 0) {   /* Get Schedule */
             WEBUI.scheduleJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getNetworks", 11) == 0) {   /* Networks */
+          } else if (strncmp(command, "getNetworks", 11) == 0) {   /* Get Networks */
             WEBUI.networksJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getDuty", 7) == 0) {        /* Current led duty */
+          } else if (strncmp(command, "getDuty", 7) == 0) {        /* Get Current led duty */
             WEBUI.dutyJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getSettings", 11) == 0) {   /* Settings (Led color + NTP, MQTT) */
+          } else if (strncmp(command, "getSettings", 11) == 0) {   /* Get Settings (Led color + NTP, MQTT) */
             WEBUI.settingsJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "setSettings", 11) == 0) {   /* New Services and Led Settings */
+          } else if (strncmp(command, "setSettings", 11) == 0) {   /* Set New Services and Led Settings */
 
             /* Parse Services config */
             JsonObject services = object["services"];
@@ -129,6 +129,9 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
 
             /* Store EEPROM settings (sync cache and eeprom) */
             CONFIG.setSettings();
+
+            /* Reconfigure network and services */
+            NETWORK.reloadSettings();
 
             ws.text(client->id(), successJson);
 
@@ -177,12 +180,12 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
             for (uint8_t i = 0; i < duty.size(); i++) {
               if (i < MAX_LED_CHANNELS) {
                 uint8_t new_duty = duty[i];
-                SCHEDULE.setChannelDuty(new_duty, i);
-
 #ifdef DEBUG_WEB
                 uint8_t old_duty = SCHEDULE.getChannelDuty(i);
                 Serial.printf("[WEBSOCKET] Led Duty: new: %d, old: %d\r\n", new_duty, old_duty);
 #endif
+                /* Apply new Duty */
+                SCHEDULE.setChannelDuty(new_duty, i);
               }
             }
 
@@ -316,8 +319,7 @@ void WEBUIClass::settingsJson(char *result, size_t len) {
 #ifdef DEBUG_WEB
     Serial.printf("[JSON] Free HEAP Before Serialization: %d \r\n", ESP.getFreeHeap());
 #endif
-  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(11)
-      + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
+  const size_t capacity = JSON_OBJECT_SIZE(14) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
 
   DynamicJsonDocument doc(capacity + 30);
   JsonObject root = doc.to<JsonObject>();
@@ -368,7 +370,7 @@ void WEBUIClass::networksJson(char *result, size_t len) {
 #ifdef DEBUG_WEB
   Serial.printf("[JSON] Free HEAP Before Serialization: %d \r\n", ESP.getFreeHeap());
 #endif
-  const size_t capacity = JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_NETWORKS) + JSON_OBJECT_SIZE(8) * MAX_NETWORKS;
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_NETWORKS) + JSON_OBJECT_SIZE(9) * MAX_NETWORKS;
 
   DynamicJsonDocument doc(capacity + 30);
   JsonObject root = doc.to<JsonObject>();
@@ -409,7 +411,7 @@ void WEBUIClass::scheduleJson(char *result, size_t len) {
   Serial.printf("[JSON] Free HEAP Before Serialization: %d \r\n", ESP.getFreeHeap());
 #endif
 
-  const size_t capacity = JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(1)
+  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(1)
       + MAX_SCHEDULE * (JSON_OBJECT_SIZE(4) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS))
       + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(3) * MAX_LED_CHANNELS);
 
@@ -469,9 +471,8 @@ void WEBUIClass::statusJson(char *result, size_t len) {
   Serial.printf("[JSON] Free HEAP Before Serialization: %d \r\n", ESP.getFreeHeap());
 #endif
 
-  const size_t capacity = JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(2) + JSON_OBJECT_SIZE(8)
-      + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
-  DynamicJsonDocument doc(capacity + 30);
+  const size_t capacity = JSON_OBJECT_SIZE(13);
+  DynamicJsonDocument doc(capacity + 200);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getStatus";
 
@@ -511,11 +512,11 @@ void WEBUIClass::statusJson(char *result, size_t len) {
 
 void WEBUIClass::dutyJson(char *result, size_t len) {
 #ifdef DEBUG_WEB
-  Serial.printf("[JSON] Free HEAP Before Serialization: %d \r\n", ESP.getFreeHeap());
+  uint32_t heap = system_get_free_heap_size();
 #endif
 
-  const size_t capacity = JSON_OBJECT_SIZE(1) + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
-  DynamicJsonDocument doc(capacity + 30);
+  const size_t capacity = JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
+  DynamicJsonDocument doc(capacity + 96);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getDuty";
 
@@ -528,7 +529,7 @@ void WEBUIClass::dutyJson(char *result, size_t len) {
   serializeJson(doc, result, len);
 
 #ifdef DEBUG_WEB
-  Serial.printf("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\r\n", ESP.getFreeHeap(), doc.memoryUsage());
+  Serial.printf("[JSON] Free HEAP Before %d / After Serialization: %d Memory Usage: %d\r\n", heap, system_get_free_heap_size(), doc.memoryUsage());
 #ifdef DEBUG_WEB_JSON
   serializeJson(doc, Serial);
 #endif

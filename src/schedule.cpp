@@ -163,6 +163,9 @@ void ScheduleClass::loop() {
         auto now_minute = (uint8_t)minute(local_time);
         snprintf(current_time, 6, "%02u:%02u", now_hour, now_minute);
 
+
+        NTP.getTimeDateString ();
+
         /* every min check */
         if ( (second(local_time) == 0) ) {
 
@@ -322,7 +325,7 @@ void ScheduleClass::setChannelDuty(uint8_t duty, uint8_t channel) {
 
 }
 
-/* Convert from 0 - 255 to 0 - 5000 PWM Duty */
+/* Convert from 0 - 255 to 0 - 5000 or 2500 PWM Duty */
 uint32_t ScheduleClass::toPWM(uint8_t value) {
   return value * LIGHT_MAX_PWM / 255;
 }

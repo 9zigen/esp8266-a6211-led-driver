@@ -25,24 +25,28 @@ void LEDClass::init() {
   pinMode(INFO_LED_PIN, OUTPUT);
 
   /* Setup blink timer 125 msec period */
-  led_blink_timer.attach_ms(125, std::bind(&LEDClass::refresh, this));
+  led_blink_timer.once_ms(125, std::bind(&LEDClass::refresh, this));
 
   /* Defaul mode */
   blink_mode = modes[TWO_SHORT_BLINK];
 }
 
 void LEDClass::refresh() {
-  led_refresh = true;
-}
-
-void LEDClass::loop() {
-  if (led_refresh)
-  {
-    if(blink_mode & 1<<(blink_loop&0x07)) digitalWrite(INFO_LED_PIN, LOW);
-    else  digitalWrite(INFO_LED_PIN, HIGH);
-    blink_loop++;
-    led_refresh = false;
+  /* iterate on every bit "blink_mode", 1 = LED ON, 0 = LED OFF */
+  if( blink_mode & 1<<(blink_loop & 0x07) ) {
+    digitalWrite(INFO_LED_PIN, LOW);
+  } else {
+    digitalWrite(INFO_LED_PIN, HIGH);
   }
+
+  if ((blink_loop & 0x07) == 7) {
+    /* pause */
+    led_blink_timer.once_ms(5000, std::bind(&LEDClass::refresh, this));
+  } else {
+    led_blink_timer.once_ms(125, std::bind(&LEDClass::refresh, this));
+  }
+
+  blink_loop++;
 }
 
 void LEDClass::setMode(led_mode_t mode) {

@@ -49,6 +49,6 @@ void statusLoop() {
     publishDeviceStatusToMqtt();
 
     /* Setup refresh timer */
-    status_refresh_timer.once(30, refresh_tik);
+    status_refresh_timer.once(300, refresh_tik);
   }
 };

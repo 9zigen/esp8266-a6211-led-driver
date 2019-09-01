@@ -18,6 +18,9 @@
 AsyncWebServer server(80);
 
 void setup() {
+  /* 160Mhz */
+  /* ToDo test 160Mhz */
+
   Serial.begin(115200);
 
   /* Load all CONFIG from eeprom */
@@ -25,7 +28,6 @@ void setup() {
 
   /* Setup and start WiFi */
   NETWORK.init();
-
 
   /* OTA Setup */
   ArduinoOTA.onStart([]() {
@@ -84,9 +86,6 @@ void loop() {
 
   /* Schedule loop */
   SCHEDULE.loop();
-
-  /* Led */
-  LED.loop();
 
   /* check connection loop */
   NETWORK.loop();

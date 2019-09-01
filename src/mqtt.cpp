@@ -11,6 +11,7 @@
 #include "schedule.h"
 #include "mqtt.h"
 #include "status.h"
+#include "Network.h"
 
 AsyncMqttClient mqttClient;
 Ticker mqttReconnectTimer;
@@ -23,10 +24,12 @@ void onMqttConnect(bool sessionPresent) {
 
   char buf[128];
 
-  /* Subscribe */
+  /* Subscribe
+   * [hostname]/channel/[channel_number]/set
+   * */
   for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
     /* make topic string */
-    snprintf(buf, 128, "%s/led/%d/set", CONFIG.getHostname(), i);
+    snprintf(buf, 128, "%s/channel/%d/set", CONFIG.getHostname(), i);
 
     /* subscribe to topic QoS 0 */
     if (!mqttClient.subscribe(buf, 0))
@@ -42,7 +45,7 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 }
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
-  Serial.println("Subscribe acknowledged.");
+  Serial.println("[MQTT] Subscribe acknowledged.");
   Serial.print("  packetId: ");
   Serial.println(packetId);
   Serial.print("  qos: ");
@@ -50,13 +53,13 @@ void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
 }
 
 void onMqttUnsubscribe(uint16_t packetId) {
-  Serial.println("Unsubscribe acknowledged.");
+  Serial.println("[MQTT] Unsubscribe acknowledged.");
   Serial.print("  packetId: ");
   Serial.println(packetId);
 }
 
-/* topic: LED_11324571/led/0/set
- * payload: decimal
+/* topic: LED_11324571/channel/0/set
+ * payload: decimal 0-255
  * */
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
 #ifdef DEBUG_MQTT
@@ -67,7 +70,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   char buf[128];
   uint32_t led_id = 0;
   uint8_t duty = 0;
-  sscanf(topic, "%s/led/%u/set", buf, &led_id);
+  sscanf(topic, "%s/channel/%u/set", buf, &led_id);
 
   duty = (uint8_t) atoi(payload);
 
@@ -80,7 +83,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 }
 
 void onMqttPublish(uint16_t packetId) {
-  Serial.println("Publish acknowledged.");
+  Serial.println("[MQTT] Publish acknowledged.");
   Serial.print("  packetId: ");
   Serial.println(packetId);
 }
@@ -112,20 +115,26 @@ void initMqtt() {
       mqttClient.setCredentials(services->mqtt_user, services->mqtt_password);
     }
   }
-
 }
 
 void connectToMqtt() {
+  /* return if MQTT Disabled */
   if (!mqtt_enabled)
+    return;
+
+  /* return if not connected to AP */
+  if (!NETWORK.isConnected)
     return;
 
   Serial.println("[MQTT] Connecting...");
   mqttClient.connect();
 }
 
-/* Publish led channels current duty */
+/* Publish led channels current duty
+ * [hostname]/channel/[channel_number]
+ * */
 void publishLedStatusToMqtt() {
-  if (!mqtt_enabled)
+  if (!mqtt_enabled || !isConnected)
     return;
 
   char buf[128];
@@ -134,7 +143,7 @@ void publishLedStatusToMqtt() {
   /* Publish */
   for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
     /* make topic string */
-    snprintf(buf, 128, "%s/led/%d", CONFIG.getHostname(), i);
+    snprintf(buf, 128, "%s/channel/%d", CONFIG.getHostname(), i);
 
     /* make mesage string */
     snprintf(message_buf, 128, "%d", SCHEDULE.getChannelDuty(i));
@@ -149,7 +158,9 @@ void publishLedStatusToMqtt() {
   }
 }
 
-/* Publish device status */
+/* Publish device status
+ * [hostname]/status
+ * */
 void publishDeviceStatusToMqtt() {
   if (!mqtt_enabled || !isConnected)
     return;
@@ -161,7 +172,7 @@ void publishDeviceStatusToMqtt() {
   snprintf(buf, 128, "%s/status", CONFIG.getHostname());
 
   /* make message json string */
-  const size_t capacity = JSON_OBJECT_SIZE(7);
+  const size_t capacity = JSON_OBJECT_SIZE(7) + 256;
   DynamicJsonDocument doc(capacity);
   JsonObject root = doc.to<JsonObject>();
 
@@ -179,8 +190,10 @@ void publishDeviceStatusToMqtt() {
   serializeJson(doc, message_buf, 512);
 
 #ifdef DEBUG_MQTT
-    serializeJson(doc, Serial);
-    Serial.printf("\n[MQTT] Publish device status.\n");
+  Serial.printf("\n[MQTT] Publish device status.\n");
+#ifdef DEBUG_MQTT_JSON
+  serializeJson(doc, Serial);
+#endif
 #endif
 
   /* publish led status to topic QoS 0, Retain */
