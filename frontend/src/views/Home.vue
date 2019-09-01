@@ -5,7 +5,7 @@
     <div class="tile is-ancestor">
 
       <!-- left col -->
-      <div class="tile is-vertical">
+      <div class="tile is-vertical is-6">
         <!-- Schedule chart -->
         <div class="tile is-parent">
           <article class="tile is-child notification is-light">
@@ -88,20 +88,10 @@
                 <div class="field is-horizontal" v-for="(led, index) in duty">
                   <div class="field-label is-normal">
                     <label class="label">
-                      LED #{{index}}
-                      <span class="tag is-hidden-tablet" v-bind:class="{'is-success': led > 0, 'is-dark': led === 0}">
-                          {{ledStatus(led)}}
-                        </span>
+                      #{{index}} {{ledStatus(led)}}
                     </label>
                   </div>
                   <div class="field-body">
-                    <div class="field">
-                      <div class="control">
-                        <span class="tag is-hidden-mobile" v-bind:class="{'is-success': led > 0, 'is-dark': led === 0}">
-                          {{ledStatus(led)}}
-                        </span>
-                      </div>
-                    </div>
                     <div class="field">
                       <div class="control">
                         <slider v-model.number="duty[index]" min="0" max="255" v-on:change="setDuty"></slider>
@@ -120,17 +110,12 @@
 
 <script>
 
-import ScheduleChart from '@/components/Ui/ScheduleChart'
-import ToggleSwitch from '@/components/Inputs/ToggleSwitch'
-import Slider from '@/components/Inputs/InputSlider'
 import { store, mutations } from '../store'
-import EventBus from '../eventBus'
+import {eventBus} from '../eventBus'
+import { api } from '../api'
 
 export default {
   name: 'home',
-  components: {
-    ToggleSwitch, Slider, ScheduleChart
-  },
   data: function () {
     return {
       status: {
@@ -168,34 +153,28 @@ export default {
       }
     },
     restoreDevice () {
-      EventBus.$emit('erase')
+      api.erase()
     },
     rebootDevice () {
-      EventBus.$emit('reboot')
+      api.reboot()
     },
     setDuty () {
       if (this.duty.length > 0) {
-        EventBus.$emit('setDuty', this.duty)
+        api.setDuty(this.duty)
       }
-
     }
   },
   mounted () {
-    EventBus.$on('statusLoaded', id => {
+    eventBus.$once('statusLoaded', () => {
       this.getStatus()
-      EventBus.$emit('getDuty')
+      api.getDuty()
     })
 
-    EventBus.$on('dutyReady', newDuty => {
+    eventBus.$once('dutyReady', newDuty => {
       console.log(newDuty)
       if (newDuty.length > 0)
         this.duty = [...newDuty]
     })
-
-    // this.refreshInterval = setTimeout(() => {
-    //   EventBus.$emit('getStatus')
-    //   console.log(this.refreshInterval)
-    // }, 1000)
   },
   destroyed() {
     // clearInterval(this.refreshInterval)

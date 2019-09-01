@@ -155,15 +155,12 @@
 
 <script>
 
-import ToggleSwitch from '@/components/Inputs/ToggleSwitch'
 import { store, mutations } from '../store'
-import EventBus from '@/eventBus'
+import { eventBus } from '@/eventBus'
+import { api } from '@/api'
 
 export default {
-  name: 'Settings',
-  components: {
-    ToggleSwitch
-  },
+  name: 'settings',
   data: function () {
     return {
       services: {
@@ -196,11 +193,7 @@ export default {
       ]
     }
   },
-  // beforeRouteEnter (to, from, next) {
-  //   next(vm => {
-  //     EventBus.$emit('getSettings')
-  //   })
-  // },
+
   methods: {
     loadSettings () {
       if (store.settings.leds)
@@ -208,21 +201,29 @@ export default {
       if (store.settings.services)
         this.services = store.settings.services
     },
+
     saveSettings () {
       mutations.setSettings({ leds: this.leds, services: this.services })
-      EventBus.$emit('setSettings')
+      api.setSettings()
     },
   },
+
   mounted () {
-    EventBus.$on('settingsLoaded', () => {
+    eventBus.$on('settingsLoaded', () => {
       this.loadSettings()
     })
-    EventBus.$on('ledsLoaded', () => {
+    eventBus.$on('ledsLoaded', () => {
       this.loadSettings()
     })
-    EventBus.$on('servicesLoaded', () => {
+    eventBus.$on('servicesLoaded', () => {
       this.loadSettings()
     })
+  },
+
+  destroyed() {
+    eventBus.$off('settingsLoaded')
+    eventBus.$off('ledsLoaded')
+    eventBus.$off('servicesLoaded')
   }
 }
 </script>

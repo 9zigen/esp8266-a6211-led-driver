@@ -30,9 +30,15 @@ export default {
 <style scoped>
   .fade-enter-active, .fade-leave-active {
     channel_transition: opacity .5s;
+    transform: translateY(0px);
+    -webkit-transform: translateY(0px);
+    transition: all ease-in .2s;
   }
   .fade-enter, .fade-leave-to {
     opacity: 0;
+    transform: translateY(-20px);
+    -webkit-transform: translateY(40px);
+    transition: all ease-out .5s;
   }
   .toast {
     position: absolute;

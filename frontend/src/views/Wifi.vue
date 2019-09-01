@@ -32,6 +32,11 @@
                   </div>
                   <p class="help">DHCP</p>
                 </div>
+                <div class="field">
+                  <div class="control has-text-centered">
+                    <button v-on:click="deleteNetwork(network.id)" class=" button is-danger"><span>Delete</span></button>
+                  </div>
+                </div>
               </div>
             </div>
             <transition name="list">
@@ -71,20 +76,6 @@
                 </div>
               </div>
             </transition>
-            <div class="columns is-centered">
-              <div class="column is-12">
-                <div class="field is-horizontal">
-                  <div class="field-label"></div>
-                  <div class="field-body">
-                    <div class="field">
-                      <div class="control">
-                        <button v-on:click="deleteNetwork(network.id)" class=" button is-danger"><span>Delete</span></button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
         <!-- End Networks -->
@@ -109,15 +100,12 @@
 
 <script>
 
-import ToggleSwitch from '@/components/Inputs/ToggleSwitch'
 import { store, mutations } from '../store'
-import EventBus from '@/eventBus'
+import { eventBus } from '@/eventBus'
+import { api } from '@/api'
 
 export default {
-  name: 'Wifi',
-  components: {
-    ToggleSwitch
-  },
+  name: 'wifi',
   data: function () {
     return {
       networks: [],
@@ -150,7 +138,7 @@ export default {
     },
     saveSettings () {
       mutations.setSettings({ networks: { items: this.networks } })
-      EventBus.$emit('setNetworks')
+      api.setNetworks()
     },
     addNetwork () {
       if (this.networks.length < this.capacity) {
@@ -167,7 +155,7 @@ export default {
         this.nextNetworkId++
       } else {
         /* error - MAX Networks reached */
-        EventBus.$emit('message', 'MAX Networks reached', 'danger')
+        eventBus.$emit('message', 'MAX Networks reached', 'danger')
       }
 
     },
@@ -179,7 +167,7 @@ export default {
     }
   },
   mounted () {
-    EventBus.$on('networksLoaded', id => {
+    eventBus.$on('networksLoaded', id => {
       this.loadSettings()
     })
   }

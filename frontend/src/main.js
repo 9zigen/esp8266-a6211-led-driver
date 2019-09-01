@@ -1,12 +1,13 @@
 import Vue from 'vue'
 import App from './App.vue'
 import router from './router'
-import VueApexCharts from 'vue-apexcharts'
 import VueTheMask from 'vue-the-mask'
+
+import GlobalComponents from '@/components/globalComponents'
 
 import './assets/style/custom.scss'
 
-Vue.use(VueApexCharts)
+Vue.use(GlobalComponents);
 Vue.use(VueTheMask)
 
 Vue.config.productionTip = false

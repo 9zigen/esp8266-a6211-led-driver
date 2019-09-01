@@ -23,7 +23,7 @@ export default {
 <style lang="scss" scoped>
   // Base Colors
   $shade-10: #2c3e50 !default;
-  $shade-1: #d7dcdf !default;
+  $shade-1: #209cee !default;
   $shade-0: #fff !default;
   $teal: #1abc9c !default;
 

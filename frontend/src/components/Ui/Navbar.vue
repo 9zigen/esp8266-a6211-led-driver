@@ -32,13 +32,11 @@
 </template>
 
 <script>
-  import Dropdown from './Dropdown'
   import { SunIcon, TrelloIcon, SettingsIcon, InfoIcon, WifiIcon } from 'vue-feather-icons'
 
   export default {
     name: 'Navbar',
     components: {
-      Dropdown,
       SunIcon,
       TrelloIcon,
       SettingsIcon,
