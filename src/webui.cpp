@@ -172,18 +172,17 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
             for (uint8_t i = 0; i < duty.size(); i++) {
               if (i < MAX_LED_CHANNELS) {
                 uint8_t new_duty = duty[i];
-#ifdef DEBUG_WEB
-                uint8_t old_duty = SCHEDULE.getChannelDuty(i);
-                LOG_WEB("[WEBSOCKET] Led Duty: new: %d, old: %d\n", new_duty, old_duty);
-#endif
+
                 /* Apply new Duty */
                 SCHEDULE.setChannelDuty(new_duty, i);
+                LOG_WEB("[WEBSOCKET] Set Led Duty: new: %d, old: %d\n", new_duty, SCHEDULE.getChannelDuty(i));
               }
             }
 
             ws.text(client->id(), successJson);
 
           } else if (strncmp(command, "setSchedule", 11) == 0) {    /* Schedule */
+
             /* Reset schedule cache */
             for (uint8_t i = 0; i < MAX_SCHEDULE; ++i) {
               schedule_t *schedule = CONFIG.getSchedule(i);
@@ -203,7 +202,7 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
                 schedule->time_minute = schedules[i]["time_minute"].as<int>();
                 schedule->active      = true;
 
-                LOG_WEB("[WEBSOCKET] Schedule: %d:%d duty size %d\n", schedule->time_hour, schedule->time_minute, schedules[i]["duty"].size());
+                LOG_WEB("[WEBSOCKET] Set Schedule: %d:%d duty size %d\n", schedule->time_hour, schedule->time_minute, schedules[i]["duty"].size());
 
                 for (uint8_t j = 0; j < schedules[i]["duty"].size(); ++j) {
                   if (j < MAX_LED_CHANNELS)
