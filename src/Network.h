@@ -7,10 +7,17 @@
 
 #include "Ticker.h"
 
+#ifdef DEBUG_NETWORK
+#define LOG_NETWORK(...) DEBUG_UI_PORT.printf( __VA_ARGS__ )
+#else
+#define LOG_NETWORK(...)
+#endif
+
 class NetworkClass {
 
 public:
   bool isConnected = false;
+  bool startNtp = false;
 
   void init();
   void reloadSettings();

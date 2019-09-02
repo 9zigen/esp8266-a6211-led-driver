@@ -43,15 +43,10 @@ void Settings::init() {
   /* init network configuration */
   for(size_t i = 0; i < MAX_NETWORKS; i++)
   {
-    #if DEBUG_EEPROM
-        Serial.printf("[EEPROM] NETWORK Config ID: %d. \n", i);
-    #endif
+    LOG_EEPROM("[EEPROM] NETWORK Config ID: %d. \n", i);
     eepromRotate.get(NETWORK_OFFSET + sizeof(network_t) * i, network[i]);
     if (network[i].magic_number != (20 + i)) {
-      #if DEBUG_EEPROM
-        Serial.printf("[EEPROM] NETWORK Config incorrect: magic %d, loading default. \n", network[i].magic_number);
-      #endif
-
+      LOG_EEPROM("[EEPROM] NETWORK Config incorrect: magic %d, loading default. \n", network[i].magic_number);
       network[i].magic_number  = (uint8_t)(20 + i);
       strlcpy(network[i].ssid, empty_str, 32);
       strlcpy(network[i].password, empty_str, 32);
@@ -160,7 +155,6 @@ void Settings::init() {
 
   /* save new config if, some values updated */
   if (_update_requested) {
-
     eepromRotate.commit();
   }
 
@@ -192,9 +186,8 @@ void Settings::setSettings() {
     eepromRotate.put(SCHEDULE_OFFSET + sizeof(schedule_t) * i, schedule[i]);
   }
 
-#if DEBUG_EEPROM
-  Serial.printf("[EEPROM] Save timer started.\n");
-#endif
+  LOG_EEPROM("[EEPROM] Save timer started.\n");
+
 
   /* Delay to avoid memory wear */
   save_timer.once(10, std::bind(&Settings::save, this));
@@ -202,10 +195,7 @@ void Settings::setSettings() {
 }
 
 bool Settings::save() {
-#if DEBUG_EEPROM
-  Serial.printf("[EEPROM] Saved.\n");
-#endif
-
+  LOG_EEPROM("[EEPROM] Saved.\n");
   return eepromRotate.commit();
 }
 

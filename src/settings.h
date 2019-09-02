@@ -12,6 +12,12 @@
   #define HARDWARE "ESP32"
 #endif
 
+#ifdef DEBUG_EEPROM
+#define LOG_EEPROM(...) DEBUG_UI_PORT.printf( __VA_ARGS__ )
+#else
+#define LOG_EEPROM(...)
+#endif
+
 #define INFO_LED_PIN 2
 #define EEPROM_SIZE 1024
 

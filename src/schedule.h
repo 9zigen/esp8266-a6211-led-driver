@@ -8,6 +8,12 @@
 #include "settings.h"
 #include "Ticker.h"
 
+#ifdef DEBUG_SCHEDULE
+#define LOG_SCHEDULE(...) DEBUG_UI_PORT.printf( __VA_ARGS__ )
+#else
+#define LOG_SCHEDULE(...)
+#endif
+
 typedef struct {
   uint8_t current_duty;
   uint8_t target_duty;

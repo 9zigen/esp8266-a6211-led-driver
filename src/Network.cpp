@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
+#include <NtpClientLib.h>
 #include "settings.h"
 #include "webui.h"
 #include "led.h"
@@ -12,32 +13,64 @@
 #include "Network.h"
 #include "mqtt.h"
 
+#define NTP_TIMEOUT 1500
 
 ESP8266WiFiMulti wifiMulti;
 Ticker reconnect_timer;
 WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
+NTPSyncEvent_t ntpEvent;
+bool ntpSyncEventTriggered = false;
+
+/* NTP Sync Event */
+void processSyncEvent (NTPSyncEvent_t ntpEvent) {
+  switch (ntpEvent) {
+    case noResponse:
+      LOG_NETWORK("[NETWORK] NTP server not reachable \n");
+      break;
+    case timeSyncd:
+      LOG_NETWORK("[NETWORK] Got NTP time: %s \n", NTP.getTimeDateString (NTP.getLastNTPSync ()).c_str());
+      break;
+    case invalidAddress:
+      LOG_NETWORK("[NETWORK] Invalid NTP server address\n");
+      break;
+    case requestSent:
+      break;
+    case errorSending:
+      LOG_NETWORK("[NETWORK] Error sending request\n");
+      break;
+    case responseError:
+      LOG_NETWORK("[NETWORK] NTP response error\n");
+      break;
+  }
+}
 
 void onSTAGotIP(const WiFiEventStationModeGotIP& event) {
-  Serial.printf("[NETWORK] Wi-Fi Got IP: %s\n", WiFi.localIP().toString().c_str());
+  LOG_NETWORK("[NETWORK] Wi-Fi Got IP: %s\n", WiFi.localIP().toString().c_str());
   LED.setMode(ONE_SHORT_BLINK);
   NETWORK.isConnected = true;
   NETWORK.stopAP();
+
+  /* NTP Connect */
+  NETWORK.startNtp = true;
 
   /* MQTT Connect */
   connectToMqtt();
 }
 
 void onSTADisconnect(const WiFiEventStationModeDisconnected& event) {
-  Serial.println("[NETWORK] Wi-Fi Disconnected");
+  LOG_NETWORK("[NETWORK] Wi-Fi Disconnected\n");
   LED.setMode(THREE_SHORT_BLINK);
   NETWORK.isConnected = false;
+
+  /* NTP sync can be disabled to avoid sync errors */
+  NTP.stop();
 
   /* Scan and connect to best network */
   NETWORK.connectSTA();
 }
 
 void NetworkClass::init() {
-  Serial.println("[NETWORK] WiFi First Time Connecting to AP...");
+  LOG_NETWORK("[NETWORK] WiFi First Time Connecting to AP...\n");
 
   /* Start STA Mode with saved credentials */
   startSTA();
@@ -45,6 +78,11 @@ void NetworkClass::init() {
   /* Register events */
   gotIpEventHandler = WiFi.onStationModeGotIP(onSTAGotIP);
   disconnectedEventHandler = WiFi.onStationModeDisconnected(onSTADisconnect);
+
+  NTP.onNTPSyncEvent ([](NTPSyncEvent_t event) {
+    ntpEvent = event;
+    ntpSyncEventTriggered = true;
+  });
 
 }
 
@@ -57,32 +95,45 @@ void NetworkClass::reloadSettings() {
 /* check WiFi connection in loop */
 void NetworkClass::loop() {
 
+  if (startNtp) {
+    /* Setup NTP */
+    int16_t tz_offset = CONFIG.getNtpOffset();
+    auto tz           = (int8_t)(tz_offset / 60);
+    auto tz_minutes   = (int8_t)(tz_offset % 60);
+    NTP.setInterval (63);
+    NTP.setNTPTimeout (NTP_TIMEOUT);
+    NTP.begin (CONFIG.getNtpServerName(), tz, true, tz_minutes);
+
+    startNtp = false;
+  }
+
+  if (ntpSyncEventTriggered) {
+    processSyncEvent (ntpEvent);
+    ntpSyncEventTriggered = false;
+  }
+
   if (!check_wifi)
     return;
 
   /* update MQTT client config */
   if (new_mqtt_settings) {
     new_mqtt_settings = false;
-    Serial.println("[NETWORK] MQTT New Settings Applied, connecting to Server...");
+    LOG_NETWORK("[NETWORK] MQTT New Settings Applied, connecting to Server...\n");
     initMqtt();
   }
 
   /* reconnect to AP requested */
   if (new_wifi_settings) {
     new_wifi_settings = false;
-    Serial.println("[NETWORK] WiFi New Settings Applied, checking...");
-
+    LOG_NETWORK("[NETWORK] WiFi New Settings Applied, checking...\n");
     startSTA();
   }
-
 
   /* If STA still not connected */
   if (wifiMulti.run() != WL_CONNECTED) {
     isConnected = false;
 
-#ifdef DEBUG_NETWORK
-      Serial.printf("[NETWORK] WiFi Connect Timeout. WiFi Mode: %d \n", WiFi.getMode());
-#endif
+    LOG_NETWORK("[NETWORK] WiFi Connect Timeout. WiFi Mode: %d \n", WiFi.getMode());
 
     if (WiFi.getMode() != WIFI_AP) {
       /* start AP */
@@ -125,10 +176,7 @@ void NetworkClass::startSTA() {
     /* check if has wifi config */
     if (network->active) {
       wifiMulti.addAP((char *)&network->ssid, (char *)&network->password);
-
-#ifdef DEBUG_NETWORK
-        Serial.printf("[NETWORK] Add config to WiFi list: %s [******] \n", network->ssid);
-#endif
+      LOG_NETWORK("[NETWORK] Add config to WiFi list: %s [******] \n", network->ssid);
     }
   }
 
@@ -138,10 +186,7 @@ void NetworkClass::startSTA() {
 }
 
 void NetworkClass::startAP() {
-#ifdef DEBUG_NETWORK
-    Serial.println("[NETWORK] WiFi Starting AP.");
-#endif
-
+  LOG_NETWORK("[NETWORK] WiFi Starting AP. \n");
   WiFi.disconnect(false);
   WiFi.mode(WIFI_AP);
 
@@ -150,13 +195,10 @@ void NetworkClass::startAP() {
 
   /* Start AP */
   WiFi.softAP(services->hostname, auth->password);
-
-#ifdef DEBUG_NETWORK
-    Serial.printf("[NETWORK] AP Started with name: %s and password: %s \r\n", services->hostname, auth->password);
-#endif
+  LOG_NETWORK("[NETWORK] AP Started with name: %s and password: %s \n", services->hostname, auth->password);
 
   IPAddress apIP = WiFi.softAPIP();
-  Serial.printf("[NETWORK] AP IP address: %s \r\n", apIP.toString().c_str());
+  LOG_NETWORK("[NETWORK] AP IP address: %s \n", apIP.toString().c_str());
 }
 
 void NetworkClass::stopAP() {
@@ -164,10 +206,7 @@ void NetworkClass::stopAP() {
   /* Disable AP Mode */
   WiFi.softAPdisconnect(false);
   WiFi.mode(WIFI_STA);
-
-#ifdef DEBUG_NETWORK
-    Serial.printf("[NETWORK] Disabling AP. WiFi Mode: %d \n", WiFi.getMode());
-#endif
+  LOG_NETWORK("[NETWORK] Disabling AP. WiFi Mode: %d \n", WiFi.getMode());
 }
 
 NetworkClass NETWORK;

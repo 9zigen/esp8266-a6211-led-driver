@@ -30,13 +30,6 @@ char current_time[6] = {0};
 #endif
 
 void ScheduleClass::init() {
-  /* Setup NTP */
-  int16_t tz_offset = CONFIG.getNtpOffset();
-  auto tz           = (int8_t)(tz_offset / 60);
-  auto tz_minutes   = (int8_t)(tz_offset % 60);
-  NTP.begin (CONFIG.getNtpServerName(), tz, true, tz_minutes);
-  NTP.setInterval (63);
-
   /* Setup PWM */
   uint32 pwm_duty_init[PWM_CHANNEL_NUM_MAX];
 
@@ -172,21 +165,17 @@ void ScheduleClass::loop() {
           /* Count Minutes left */
           auto left = (int) (minutesLeft(local_time, _schedule->time_hour, _schedule->time_minute));
 
-#ifdef DEBUG_SCHEDULE
-          Serial.printf("[SCHEDULE] Now: %s Next Point: %d:%d Minutes left: %d\n", current_time,
-                        _schedule->time_hour,
-                        _schedule->time_minute, left);
-#endif
+          LOG_SCHEDULE("[SCHEDULE] Now: %s Next Point: %d:%d Minutes left: %d\n", current_time,
+                       _schedule->time_hour,
+                       _schedule->time_minute, left);
 
           /* Set target duty from schedule */
           if (left == 0) {
             for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
               _leds[i].target_duty = _schedule->led_duty[i];
               _leds[i].steps_left  = 50;
+              LOG_SCHEDULE("[SCHEDULE] LED%d current: %d target: %d left: %d\n", i, _leds[i].current_duty, _leds[i].target_duty, left);
 
-#ifdef DEBUG_SCHEDULE
-              Serial.printf("[SCHEDULE] LED%d current: %d target: %d left: %d\n", i, _leds[i].current_duty, _leds[i].target_duty, left);
-#endif
             }
           }
         }

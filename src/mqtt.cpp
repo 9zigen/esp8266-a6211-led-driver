@@ -104,14 +104,10 @@ void initMqtt() {
     mqttClient.setServer(IPAddress(services->mqtt_ip_address), services->mqtt_port);
     mqttClient.setClientId(services->hostname);
 
-#ifdef DEBUG_MQTT
-    Serial.printf("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
-#endif
+    LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
 
     if ( (strlen(services->mqtt_user) > 0) && (strlen(services->mqtt_password) > 0) ) {
-#ifdef DEBUG_MQTT
-      Serial.printf("[MQTT] Server USE Auth: User: %s Password: %s\n", services->mqtt_user, services->mqtt_password);
-#endif
+      LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
       mqttClient.setCredentials(services->mqtt_user, services->mqtt_password);
     }
   }
@@ -126,7 +122,7 @@ void connectToMqtt() {
   if (!NETWORK.isConnected)
     return;
 
-  Serial.println("[MQTT] Connecting...");
+  LOG_MQTT("[MQTT] Connecting...\n");
   mqttClient.connect();
 }
 
@@ -145,16 +141,14 @@ void publishLedStatusToMqtt() {
     /* make topic string */
     snprintf(buf, 128, "%s/channel/%d", CONFIG.getHostname(), i);
 
-    /* make mesage string */
+    /* make message string */
     snprintf(message_buf, 128, "%d", SCHEDULE.getChannelDuty(i));
 
-#ifdef DEBUG_MQTT
-    Serial.printf("[MQTT] Publish led status.\n");
-#endif
+    LOG_MQTT("[MQTT] Publish led status.\n");
 
     /* publish led status to topic QoS 0, Retain */
     if (!mqttClient.publish(buf, 0, true, message_buf, strlen(message_buf)))
-      Serial.printf("[MQTT] ERROR Publish to topic: %s\n", buf);
+      LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
   }
 }
 
@@ -188,15 +182,14 @@ void publishDeviceStatusToMqtt() {
   root["mac_address"] = device_info->mac_address;
 
   serializeJson(doc, message_buf, 512);
+  LOG_MQTT("[MQTT] Publish device status.\n");
 
-#ifdef DEBUG_MQTT
-  Serial.printf("\n[MQTT] Publish device status.\n");
 #ifdef DEBUG_MQTT_JSON
   serializeJson(doc, Serial);
-#endif
+  Serial.println();
 #endif
 
   /* publish led status to topic QoS 0, Retain */
   if (!mqttClient.publish(buf, 0, true, message_buf, strlen(message_buf)))
-    Serial.printf("[MQTT] ERROR Publish to topic: %s\n", buf);
+    LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
 }
