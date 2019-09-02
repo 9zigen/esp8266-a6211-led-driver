@@ -79,6 +79,22 @@ void ScheduleClass::init() {
     _leds[i].steps_left   = 50;
   }
 
+  /* Fill RTC mem packet */
+  led_state_rtc_mem_t rtc_mem;
+
+  /* read RTC mem */
+  system_rtc_mem_read(64, &rtc_mem, sizeof(rtc_mem));
+
+  /* check Magic if OK, apply */
+  if (rtc_mem.magic_number == RTC_LED_MAGIC) {
+    LOG_SCHEDULE("[SCHEDULE] RTC Magic: %04x\n", rtc_mem.magic_number);
+
+    for (unsigned int i=0; i < MAX_LED_CHANNELS; i++) {
+      _leds[i].target_duty = rtc_mem.target_duty[i];
+      LOG_SCHEDULE("[SCHEDULE] GET RTC MEM LED%d target: %d\n", i, _leds[i].target_duty);
+    }
+  }
+
   /* Setup refresh timer */
   shedule_refresh_timer.attach_ms(1000, std::bind(&ScheduleClass::refresh, this));
 }
@@ -145,22 +161,19 @@ void ScheduleClass::loop() {
     /* wait next timer event */
     process_schedule = false;
 
+    /* get local time and store for later use */
+    time_t local_time = now();
+    auto now_hour   = (uint8_t)hour(local_time);
+    auto now_minute = (uint8_t)minute(local_time);
+    snprintf(current_time, 6, "%02u:%02u", now_hour, now_minute);
+
     for (int j = 0; j < MAX_SCHEDULE; ++j) {
       schedule_t * _schedule = CONFIG.getSchedule(j);
 
       if (_schedule->active && _schedule->enabled)
       {
-        /* get local time and store for later use */
-        time_t local_time = now();
-        auto now_hour   = (uint8_t)hour(local_time);
-        auto now_minute = (uint8_t)minute(local_time);
-        snprintf(current_time, 6, "%02u:%02u", now_hour, now_minute);
-
-
-        NTP.getTimeDateString ();
-
-        /* every min check */
-        if ( (second(local_time) == 0) ) {
+        /* once, every min check */
+        if ((second(local_time) == 0)) {
 
           /* Count Minutes left */
           auto left = (int) (minutesLeft(local_time, _schedule->time_hour, _schedule->time_minute));
@@ -184,7 +197,6 @@ void ScheduleClass::loop() {
 
     /* check for pending transition */
     updateLed();
-
   }
 }
 
@@ -258,8 +270,20 @@ void ScheduleClass::loop() {
 void ScheduleClass::updateLed() {
   bool transition = false;
 
-  for (auto & _led : _leds) {
-    if (_led.current_duty != _led.target_duty) {
+  /* Save Last led channels state in RTC MEM */
+  led_state_rtc_mem_t rtc_mem = {};
+  rtc_mem.magic_number = RTC_LED_MAGIC;
+
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+    rtc_mem.target_duty[i] = _leds[i].target_duty;
+
+    /* If target duty != current, start transition */
+    if (_leds[i].current_duty != _leds[i].target_duty) {
+      LOG_SCHEDULE("[SCHEDULE] RTC MEM SET LED%u target: %u\n", i, rtc_mem.target_duty[i]);
+
+      /* Save to RTC mem */
+      system_rtc_mem_write(64, &rtc_mem, sizeof(rtc_mem));
+
       transition = true;
     }
   }
@@ -311,7 +335,6 @@ void ScheduleClass::setChannelDuty(uint8_t duty, uint8_t channel) {
   if (_leds[channel].target_duty != _leds[channel].current_duty) {
     _leds[channel].steps_left = 50;
   }
-
 }
 
 /* Convert from 0 - 255 to 0 - 5000 or 2500 PWM Duty */

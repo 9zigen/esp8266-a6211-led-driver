@@ -14,11 +14,18 @@
 #define LOG_SCHEDULE(...)
 #endif
 
+#define RTC_LED_MAGIC 0xAECE00EF
+
 typedef struct {
   uint8_t current_duty;
   uint8_t target_duty;
   uint32_t steps_left;
 } led_schedule_t;
+
+typedef struct {
+  uint8_t target_duty[MAX_LED_CHANNELS];
+  uint32 magic_number;
+} led_state_rtc_mem_t;
 
 class ScheduleClass {
 
