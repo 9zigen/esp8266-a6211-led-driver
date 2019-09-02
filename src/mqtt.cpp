@@ -45,27 +45,22 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 }
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
-  Serial.println("[MQTT] Subscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-  Serial.print("  qos: ");
-  Serial.println(qos);
+  LOG_MQTT("[MQTT] Subscribe acknowledged:\n");
+  LOG_MQTT("\tpacketId/qos: %d/%d\n", packetId, qos);
 }
 
 void onMqttUnsubscribe(uint16_t packetId) {
-  Serial.println("[MQTT] Unsubscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
+  LOG_MQTT("[MQTT] Unsubscribe acknowledged:\n");
+  LOG_MQTT("\tpacketId: %d\n", packetId);
 }
 
 /* topic: LED_11324571/channel/0/set
  * payload: decimal 0-255
  * */
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-#ifdef DEBUG_MQTT
-  Serial.printf("[MQTT] Publish received. topic: %s, qos: %d, dup: %d, retain: %d, len: %d, index: %d, total: %d\n",
+  LOG_MQTT("[MQTT] Publish received:\n");
+  LOG_MQTT("\ttopic: %s, qos: %d, dup: %d, retain: %d, len: %d, index: %d, total: %d\n",
       topic, properties.qos, properties.dup, properties.retain, len, index, total);
-#endif
 
   char buf[128];
   uint32_t led_id = 0;
@@ -73,19 +68,16 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   sscanf(topic, "%s/channel/%u/set", buf, &led_id);
 
   duty = (uint8_t) atoi(payload);
-
-#ifdef DEBUG_MQTT
-  Serial.printf("[MQTT] LED#: %d Duty: %d\n", led_id, duty);
-#endif
+  LOG_MQTT("[MQTT] LED#: %d Duty: %d\n", led_id, duty);
 
   SCHEDULE.setChannelDuty(duty, (uint8_t) led_id);
 
 }
 
 void onMqttPublish(uint16_t packetId) {
-  Serial.println("[MQTT] Publish acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
+  LOG_MQTT("[MQTT] Publish acknowledged:\n");
+  LOG_MQTT("\tpacketId: %d\n", packetId);
+
 }
 
 
@@ -143,7 +135,6 @@ void publishLedStatusToMqtt() {
 
     /* make message string */
     snprintf(message_buf, 128, "%d", SCHEDULE.getChannelDuty(i));
-
     LOG_MQTT("[MQTT] Publish led status.\n");
 
     /* publish led status to topic QoS 0, Retain */

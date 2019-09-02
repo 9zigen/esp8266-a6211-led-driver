@@ -79,9 +79,8 @@ void Settings::init() {
       _update_requested = true;
 
     }
-    #if DEBUG_EEPROM
-        Serial.printf("[EEPROM] NETWORK Config ID: %d, Status: %d. \n", i, network[i].active);
-    #endif
+    LOG_EEPROM("[EEPROM] NETWORK Config ID: %d, Status: %d. \n", i, network[i].active);
+
   }
 
   /* init services configuration */
@@ -187,7 +186,6 @@ void Settings::setSettings() {
   }
 
   LOG_EEPROM("[EEPROM] Save timer started.\n");
-
 
   /* Delay to avoid memory wear */
   save_timer.once(10, std::bind(&Settings::save, this));
