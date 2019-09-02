@@ -13,8 +13,11 @@ s
 #include "ArduinoJson.h"
 #include "FS.h"
 
-//typedef std::function<void(const char* buttonId)> DashButtonHandler;
-
+#ifdef DEBUG_WEB
+#define LOG_WEB(...) DEBUG_UI_PORT.printf( __VA_ARGS__ )
+#else
+#define LOG_WEB(...)
+#endif
 
 class WEBUIClass {
 
