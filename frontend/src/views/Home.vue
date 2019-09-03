@@ -32,7 +32,8 @@
               <div class="columns">
                 <div class="column is-12-mobile">
                   <ul>
-                    <li>Time: {{status.upTime}}</li>
+                    <li>Local Time: {{status.localTime}}</li>
+                    <li>Up Time: {{status.upTime}}</li>
                     <li>MQTT Server: {{status.mqttService}}</li>
                     <li>NTP: {{status.ntpService}}</li>
                   </ul>
@@ -120,6 +121,7 @@ export default {
     return {
       status: {
         upTime: "",
+        localTime: "",
         chipId: 0,
         freeHeap: 0,
         vcc: 0,

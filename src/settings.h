@@ -72,6 +72,7 @@ typedef struct {
   uint16_t mqtt_port;           // MQTT Server port 1883 default
   char mqtt_user[16];           // 16 Char MAX
   char mqtt_password[16];       // 16 Char MAX
+  uint8_t mqtt_qos;
   bool enable_ntp_service;      // Enable NTP Service
   bool enable_mqtt_service;     // Enable MQTT Service
 } services_t;

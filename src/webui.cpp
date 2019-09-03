@@ -5,6 +5,7 @@
 #include "AsyncWebSocket.h"
 #include "Arduino.h"
 #include <functional>
+#include <NtpClientLib.h>
 #include "ArduinoJson.h"
 #include "settings.h"
 #include "webui.h"
@@ -49,7 +50,7 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
       } else {
         JsonObject object = doc.as<JsonObject>();
         const char * command      = object["command"];
-        const char * successJson  = "{\"sucess\":true}";;
+        const char * successJson  = "{\"response\":\"success\"}";;
         const char * pongJson     = "{\"response\":\"pong\"}";;
 
         if(command != nullptr) {
@@ -100,6 +101,7 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
             strlcpy(service->mqtt_password, services["mqtt_password"] | "", 16);
             WEBUI.stringToIP(services["mqtt_ip_address"], service->mqtt_ip_address);
             service->mqtt_port           = services["mqtt_port"].as<int>();
+            service->mqtt_qos            = services["mqtt_qos"].as<int>();
             service->utc_offset_minutes  = services["utc_offset_minutes"].as<int>();
             service->ntp_dst             = services["ntp_dst"].as<boolean>();
             service->enable_ntp_service  = services["enable_ntp_service"].as<boolean>();
@@ -302,10 +304,11 @@ void WEBUIClass::stringToIP(const char *ip_string, uint8_t *octets) {
   }
 }
 
+/* Return JSON string with current device settings */
 void WEBUIClass::settingsJson(char *result, size_t len) {
   LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
 
-  const size_t capacity = JSON_OBJECT_SIZE(14) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
+  const size_t capacity = JSON_OBJECT_SIZE(15) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
   DynamicJsonDocument doc(capacity + 30);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getSettings";
@@ -322,6 +325,7 @@ void WEBUIClass::settingsJson(char *result, size_t len) {
   services["ntp_dst"]             = service->ntp_dst;
   services["mqtt_ip_address"]     = ipAddressToString(service->mqtt_ip_address);
   services["mqtt_port"]           = service->mqtt_port;
+  services["mqtt_qos"]            = service->mqtt_qos;
   services["mqtt_user"]           = service->mqtt_user;
   services["mqtt_password"]       = service->mqtt_password;
   services["enable_ntp_service"]  = service->enable_ntp_service;
@@ -443,7 +447,7 @@ void WEBUIClass::scheduleJson(char *result, size_t len) {
 void WEBUIClass::statusJson(char *result, size_t len) {
   LOG_WEB("[JSON] Free HEAP Before Serialization: %d \n", ESP.getFreeHeap());
 
-  const size_t capacity = JSON_OBJECT_SIZE(13);
+  const size_t capacity = JSON_OBJECT_SIZE(14);
   DynamicJsonDocument doc(capacity + 200);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getStatus";
@@ -462,7 +466,8 @@ void WEBUIClass::statusJson(char *result, size_t len) {
   /* Get device info, refresh periodical */
   status_t * device_info = getDeviceInfo();
 
-  status["upTime"]            = SCHEDULE.getCurrentTimeString();
+  status["upTime"]            = NTP.getUptimeString();
+  status["localTime"]         = SCHEDULE.getCurrentTimeString();
   status["chipId"]            = device_info->chip_id;
   status["cpuFreq"]           = device_info->cpu_freq;
   status["vcc"]               = device_info->vcc;

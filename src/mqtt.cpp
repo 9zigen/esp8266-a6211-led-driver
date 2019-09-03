@@ -7,6 +7,7 @@
 #include <Ticker.h>
 #include "ArduinoJson.h"
 #include <AsyncMqttClient.h>
+#include <NtpClientLib.h>
 #include "settings.h"
 #include "schedule.h"
 #include "mqtt.h"
@@ -17,6 +18,7 @@ AsyncMqttClient mqttClient;
 Ticker mqttReconnectTimer;
 bool mqtt_enabled = false;
 bool isConnected = false;
+uint8_t mqtt_qos = 0;
 
 void onMqttConnect(bool sessionPresent) {
   Serial.printf("[MQTT] Connected to server. \n");
@@ -32,7 +34,7 @@ void onMqttConnect(bool sessionPresent) {
     snprintf(buf, 128, "%s/channel/%d/set", CONFIG.getHostname(), i);
 
     /* subscribe to topic QoS 0 */
-    if (!mqttClient.subscribe(buf, 0))
+    if (!mqttClient.subscribe(buf, mqtt_qos))
       Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
   }
 
@@ -85,6 +87,7 @@ void initMqtt() {
   services_t * services = CONFIG.getService();
   if (services->enable_mqtt_service) {
     mqtt_enabled = true;
+    mqtt_qos = services->mqtt_qos;
     mqttClient.onConnect(onMqttConnect);
     mqttClient.onDisconnect(onMqttDisconnect);
     mqttClient.onSubscribe(onMqttSubscribe);
@@ -157,13 +160,14 @@ void publishDeviceStatusToMqtt() {
   snprintf(buf, 128, "%s/status", CONFIG.getHostname());
 
   /* make message json string */
-  const size_t capacity = JSON_OBJECT_SIZE(7) + 256;
+  const size_t capacity = JSON_OBJECT_SIZE(8) + 256;
   DynamicJsonDocument doc(capacity);
   JsonObject root = doc.to<JsonObject>();
 
   /* get device info */
   status_t * device_info = getDeviceInfo();
 
+  root["up_time"]     = NTP.getUptimeString();
   root["chip_id"]     = device_info->chip_id;
   root["free_heap"]   = device_info->free_heap;
   root["cpu_freq"]    = device_info->cpu_freq;

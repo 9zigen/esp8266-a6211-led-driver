@@ -104,6 +104,7 @@ void Settings::init() {
     strcpy(service.mqtt_password, empty_str);
     service.mqtt_port = 1833;
     service.enable_mqtt_service = false;
+    service.mqtt_qos = 0;
 
     /* set default values */
     eepromRotate.put(SERVICES_OFFSET, service);

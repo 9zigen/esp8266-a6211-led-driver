@@ -113,8 +113,7 @@
             case 'success':
               this.showMessage('Success', 'success')
               break
-            default:
-              break
+            default: break
           }
         }
       })

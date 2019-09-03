@@ -73,6 +73,12 @@
                   </div>
                   <p class="help">MQTT Server Port</p>
                 </div>
+                <div class="field">
+                  <div class="control">
+                    <input class="input" type="text" placeholder="MQTT QoS" v-model="services.mqtt_qos">
+                  </div>
+                  <p class="help">MQTT QoS</p>
+                </div>
               </div>
             </div>
             <div class="field is-horizontal">
@@ -172,6 +178,7 @@ export default {
         mqtt_port: '',
         mqtt_user: '',
         mqtt_password: '',
+        mqtt_qos: 0,
         enable_ntp_service: false,
         enable_mqtt_service: false,
       },

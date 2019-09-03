@@ -46,6 +46,11 @@ export default {
       if (store.settings.schedule.items.length > 0) {
         console.log('loadSchedule')
 
+        /* Sort array by TIME */
+        store.settings.schedule.items.sort(function(a, b) {
+          return (a.time_hour * 60 + a.time_minute) - (b.time_hour * 60 + b.time_minute);
+        });
+
         let _labels = store.settings.schedule.items.map((v) => { return this.timeToString(v.time_hour, v.time_minute) })
         let _series = store.settings.leds.map((value, index) => {
           return {
