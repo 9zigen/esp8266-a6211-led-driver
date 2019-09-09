@@ -1,6 +1,6 @@
 import Vue from 'vue'
 
-let host = process.env.NODE_ENV == 'production'?  "ws://" + document.location.host + "/ws" : "ws://192.168.2.46:/ws"
+const host = process.env.NODE_ENV === 'production' ? `ws://${document.location.host}/ws` : 'ws://192.168.2.46:/ws'
 
 const socket = new WebSocket(host)
 

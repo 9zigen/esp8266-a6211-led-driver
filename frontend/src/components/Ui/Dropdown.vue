@@ -1,10 +1,17 @@
 <template>
-  <div class="navbar-item has-dropdown" v-bind:class="showMenu" v-on:click="active = !active">
+  <div
+    class="navbar-item has-dropdown"
+    v-bind:class="showMenu"
+    @click="active = !active"
+  >
     <a class="navbar-link">
       More
     </a>
-    <div class="navbar-dropdown" v-bind:class="boxed? 'is-boxed':''">
-      <slot></slot>
+    <div
+      class="navbar-dropdown"
+      v-bind:class="boxed? 'is-boxed':''"
+    >
+      <slot />
     </div>
   </div>
 </template>
@@ -15,13 +22,13 @@ export default {
   props: {
     boxed: Boolean
   },
-  data: function () {
+  data () {
     return {
       active: false
     }
   },
   computed: {
-    showMenu: function () {
+    showMenu () {
       return this.active ? 'is-active' : ''
     }
   }

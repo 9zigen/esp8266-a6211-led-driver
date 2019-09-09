@@ -1,3 +1,4 @@
+import { CheckIcon, XIcon, PlusIcon, ClockIcon, TrelloIcon, SettingsIcon, InfoIcon, WifiIcon } from 'vue-feather-icons'
 import Chart from './Ui/Chart'
 import ScheduleChart from '@/components/Ui/ScheduleChart'
 import ToggleSwitch from '@/components/Inputs/ToggleSwitch'
@@ -9,5 +10,15 @@ export default {
     Vue.component('toggle-switch', ToggleSwitch)
     Vue.component('slider', Slider)
     Vue.component('schedule-chart', ScheduleChart)
+
+    /* feather-icons */
+    Vue.component('CheckIcon', CheckIcon)
+    Vue.component('XIcon', XIcon)
+    Vue.component('PlusIcon', PlusIcon)
+    Vue.component('ClockIcon', ClockIcon)
+    Vue.component('TrelloIcon', TrelloIcon)
+    Vue.component('SettingsIcon', SettingsIcon)
+    Vue.component('InfoIcon', InfoIcon)
+    Vue.component('WifiIcon', WifiIcon)
   }
 }

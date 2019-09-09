@@ -1,6 +1,9 @@
 <template>
   <label class="input-label">
-    <input class="input-text" type="text"/>
+    <input
+      class="input-text"
+      type="text"
+    >
   </label>
 </template>
 
@@ -8,7 +11,10 @@
 export default {
   name: 'InputText',
   props: {
-    placeholder: String
+    placeholder: {
+      type: String,
+      default: () => ''
+    }
   }
 }
 </script>

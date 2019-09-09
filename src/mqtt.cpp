@@ -26,17 +26,43 @@ void onMqttConnect(bool sessionPresent) {
 
   char buf[128];
 
-  /* Subscribe
+  /* Subscribe to Set Duty topic
    * [hostname]/channel/[channel_number]/set
    * */
   for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
     /* make topic string */
     snprintf(buf, 128, "%s/channel/%d/set", CONFIG.getHostname(), i);
+    LOG_MQTT("[MQTT] Subscribe to topic: %s\n", buf);
 
-    /* subscribe to topic QoS 0 */
+    /* subscribe to topic QoS */
     if (!mqttClient.subscribe(buf, mqtt_qos))
       Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
   }
+
+  /* Subscribe to Switch topic
+   * [hostname]/channel/[channel_number]/switch
+   * */
+  for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
+    /* make topic string */
+    snprintf(buf, 128, "%s/channel/%d/switch", CONFIG.getHostname(), i);
+    LOG_MQTT("[MQTT] Subscribe to topic: %s\n", buf);
+
+    /* subscribe to topic QoS */
+    if (!mqttClient.subscribe(buf, mqtt_qos))
+      Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
+  }
+
+  /* Subscribe to Brightness topic
+   * [hostname]/brightness/set
+   * */
+
+  /* make topic string */
+  snprintf(buf, 128, "%s/brightness/set", CONFIG.getHostname());
+  LOG_MQTT("[MQTT] Subscribe to topic: %s\n", buf);
+
+  /* subscribe to topic QoS */
+  if (!mqttClient.subscribe(buf, mqtt_qos))
+    Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
 
 }
 
@@ -48,16 +74,18 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
   LOG_MQTT("[MQTT] Subscribe acknowledged:\n");
-  LOG_MQTT("\tpacketId/qos: %d/%d\n", packetId, qos);
+  LOG_MQTT("\tpacketID %d QoS: %d\n", packetId, qos);
 }
 
 void onMqttUnsubscribe(uint16_t packetId) {
   LOG_MQTT("[MQTT] Unsubscribe acknowledged:\n");
-  LOG_MQTT("\tpacketId: %d\n", packetId);
+  LOG_MQTT("\tpacketID: %d\n", packetId);
 }
 
-/* topic: LED_11324571/channel/0/set
- * payload: decimal 0-255
+/* Topic examples:
+ * Brightness: LED_11324571/brightness        | payload: 0-255
+ * Set Duty:   LED_11324571/channel/0/set     | payload: 0-255
+ * Switch:     LED_11324571/channel/0/switch  | payload: 0-1
  * */
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
   LOG_MQTT("[MQTT] Publish received:\n");
@@ -65,23 +93,49 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
       topic, properties.qos, properties.dup, properties.retain, len, index, total);
 
   char buf[128];
-  uint32_t led_id = 0;
-  uint8_t duty = 0;
-  sscanf(topic, "%s/channel/%u/set", buf, &led_id);
 
-  duty = (uint8_t) atoi(payload);
-  LOG_MQTT("[MQTT] LED#: %d Duty: %d\n", led_id, duty);
+  /* check brightness topic */
+  snprintf(buf, 128, "%s/brightness/set", CONFIG.getHostname());
 
-  SCHEDULE.setChannelDuty(duty, (uint8_t) led_id);
+  /* Brightness received */
+  if (strncmp(topic, buf, 128) == 0) {
+    uint8_t brightness = atoi(payload) & 0xff;
+
+    LOG_MQTT("[MQTT] Set Brightness: %d\n", brightness);
+    SCHEDULE.setBrightness(brightness);
+    return;
+  }
+
+  /* check switch or set command */
+  uint32_t channel = 0;
+  char command[7];
+  char scan[128];
+
+  /* "sscanf" template example: LED_11324571/channel/%u/%6s */
+  snprintf(scan, 128, "%s/channel/%%u/%%6s", CONFIG.getHostname());
+  sscanf(topic, scan, &channel, command);
+
+  LOG_MQTT("[MQTT] Command: %s payload: %s\n", command, payload);
+
+  if (strncmp(command, "set", 3) == 0) {
+    /* Set command */
+    uint8_t duty = atoi(payload) & 0xff;
+    LOG_MQTT("[MQTT] Set Duty: %u Channel: %u\n", duty, channel);
+    SCHEDULE.setChannelDuty(channel, duty);
+
+  } else if (strncmp(command, "switch", 6) == 0) {
+    /* switch command */
+    uint8_t state = atoi(payload) & 0xff;
+    LOG_MQTT("[MQTT] Set State Channel: %u to %u\n", channel, state);
+    SCHEDULE.setChannelState(channel, static_cast<channel_state_t>(state));
+  }
 
 }
 
 void onMqttPublish(uint16_t packetId) {
   LOG_MQTT("[MQTT] Publish acknowledged:\n");
-  LOG_MQTT("\tpacketId: %d\n", packetId);
-
+  LOG_MQTT("\tpacketID: %d\n", packetId);
 }
-
 
 void initMqtt() {
   services_t * services = CONFIG.getService();
@@ -102,7 +156,6 @@ void initMqtt() {
     LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
 
     if ( (strlen(services->mqtt_user) > 0) && (strlen(services->mqtt_password) > 0) ) {
-      LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
       mqttClient.setCredentials(services->mqtt_user, services->mqtt_password);
     }
   }
@@ -121,10 +174,30 @@ void connectToMqtt() {
   mqttClient.connect();
 }
 
+/* Publish all channels brightness */
+void publishBrightness() {
+  if (!mqtt_enabled || !isConnected)
+    return;
+
+  char buf[128];
+  char message_buf[10];
+
+  /* make topic string */
+  snprintf(buf, 128, "%s/brightness", CONFIG.getHostname());
+
+  /* make message string */
+  snprintf(message_buf, 128, "%d", SCHEDULE.getBrightness());
+  LOG_MQTT("[MQTT] Publish Brightness: %u\n", SCHEDULE.getBrightness());
+
+  /* publish led status to topic QoS 0, Retain */
+  if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))
+    LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
+}
+
 /* Publish led channels current duty
  * [hostname]/channel/[channel_number]
  * */
-void publishLedStatusToMqtt() {
+void publishChannelDuty() {
   if (!mqtt_enabled || !isConnected)
     return;
 
@@ -132,16 +205,41 @@ void publishLedStatusToMqtt() {
   char message_buf[10];
 
   /* Publish */
-  for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
     /* make topic string */
     snprintf(buf, 128, "%s/channel/%d", CONFIG.getHostname(), i);
 
     /* make message string */
     snprintf(message_buf, 128, "%d", SCHEDULE.getChannelDuty(i));
-    LOG_MQTT("[MQTT] Publish led status.\n");
+    LOG_MQTT("[MQTT] Publish Channel: %u duty: %u.\n", i, SCHEDULE.getChannelDuty(i));
 
     /* publish led status to topic QoS 0, Retain */
-    if (!mqttClient.publish(buf, 0, true, message_buf, strlen(message_buf)))
+    if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))
+      LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
+  }
+}
+
+/* Publish led channels current state
+ * [hostname]/channel/[channel_number]/state
+ * */
+void publishChannelState() {
+  if (!mqtt_enabled || !isConnected)
+    return;
+
+  char buf[128];
+  char message_buf[10];
+
+  /* Publish */
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+    /* make topic string */
+    snprintf(buf, 128, "%s/channel/%d/state", CONFIG.getHostname(), i);
+
+    /* make message string */
+    snprintf(message_buf, 128, "%d", SCHEDULE.getChannelState(i));
+    LOG_MQTT("[MQTT] Publish Channel: %u state: %u.\n", i, SCHEDULE.getChannelState(i));
+
+    /* publish led status to topic QoS 0, Retain */
+    if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))
       LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
   }
 }
@@ -185,6 +283,6 @@ void publishDeviceStatusToMqtt() {
 #endif
 
   /* publish led status to topic QoS 0, Retain */
-  if (!mqttClient.publish(buf, 0, true, message_buf, strlen(message_buf)))
+  if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))
     LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
 }

@@ -18,11 +18,17 @@ AsyncWebSocket ws("/ws");
 
 // Handle Websocket Requests
 void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
-  if(type == WS_EVT_CONNECT){
+  if(type == WS_EVT_CONNECT) {
     LOG_WEB("[WEBSOCKET] Client connection received\n");
-  } else if(type == WS_EVT_DISCONNECT){
+  } else if(type == WS_EVT_DISCONNECT) {
     LOG_WEB("[WEBSOCKET] Client disconnected\n");
-  } else if(type == WS_EVT_DATA){
+  } else if(type == WS_EVT_ERROR) {
+    //error was received from the other end
+    os_printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_PONG) {
+    //pong message was received (in response to a ping request maybe)
+    os_printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
+  } else if(type == WS_EVT_DATA) {
     auto *info = (AwsFrameInfo*)arg;
     if (info->final && info->index == 0 && info->len == len) {
       String message = "";
@@ -37,21 +43,21 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
       }
 
 #ifdef DEBUG_WEB_JSON
-        Serial.println("[WEBSOCKET] Message Received: "+message);
+      Serial.println("[WEBSOCKET] Message Received: "+message);
 #endif
 
       StaticJsonDocument<2000> doc;
       DeserializationError err = deserializeJson(doc, message);
       if (err) {
 #ifdef DEBUG_WEB
-          Serial.println(F("deserializeJson() failed: "));
-          Serial.println(err.c_str());
+        Serial.println(F("deserializeJson() failed: "));
+        Serial.println(err.c_str());
 #endif
       } else {
         JsonObject object = doc.as<JsonObject>();
         const char * command      = object["command"];
-        const char * successJson  = "{\"response\":\"success\"}";;
-        const char * pongJson     = "{\"response\":\"pong\"}";;
+        const char * successJson  = R"({"response":"success"})";
+        const char * pongJson     = R"({"response":"pong"})";
 
         if(command != nullptr) {
           LOG_WEB("[WEBSOCKET] Got %s Command from Client %u \n", command, client->id());
@@ -59,37 +65,45 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
           char response[1024];
           memset(response, 0, 1024);
 
-          if (strncmp(command, "ping", 4) == 0) {                 /* Ping */
+          if (strncmp(command, "ping", 4) == 0) {
+            /* Ping */
             ws.text(client->id(), pongJson);
 
-          } else if (strncmp(command, "erase", 5) == 0) {          /* Erase EEPROM */
+          } else if (strncmp(command, "erase", 5) == 0) {
+            /* Erase EEPROM */
             CONFIG.erase();
             ws.text(client->id(), successJson);
-            /* reboot */
+
+            /* Reboot */
             ESP.restart();
 
-          } else if (strncmp(command, "getStatus", 9) == 0) {      /* Get Status */
+          } else if (strncmp(command, "getStatus", 9) == 0) {
+            /* Get Status */
             WEBUI.statusJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getSchedule", 11) == 0) {   /* Get Schedule */
+          } else if (strncmp(command, "getSchedule", 11) == 0) {
+            /* Get Schedule */
             WEBUI.scheduleJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getNetworks", 11) == 0) {   /* Get Networks */
+          } else if (strncmp(command, "getNetworks", 11) == 0) {
+            /* Get Networks */
             WEBUI.networksJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getDuty", 7) == 0) {        /* Get Current led duty */
-            WEBUI.dutyJson((char *) &response, sizeof(response));
+          } else if (strncmp(command, "getLight", 8) == 0) {
+            /* Get Current light status (duty + brightness) */
+            WEBUI.lightJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "getSettings", 11) == 0) {   /* Get Settings (Led color + NTP, MQTT) */
+          } else if (strncmp(command, "getSettings", 11) == 0) {
+            /* Get Settings (Led color + NTP, MQTT) */
             WEBUI.settingsJson((char *) &response, sizeof(response));
             ws.text(client->id(), response);
 
-          } else if (strncmp(command, "setSettings", 11) == 0) {   /* Set New Services and Led Settings */
-
+          } else if (strncmp(command, "setServices", 11) == 0) {
+            /* Set New Services */
             /* Parse Services config */
             JsonObject services = object["services"];
 
@@ -107,6 +121,16 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
             service->enable_ntp_service  = services["enable_ntp_service"].as<boolean>();
             service->enable_mqtt_service = services["enable_mqtt_service"].as<boolean>();
 
+            /* Store EEPROM settings (sync cache and eeprom) */
+            CONFIG.setSettings();
+
+            /* Reconfigure network and services */
+            NETWORK.reloadSettings();
+
+            ws.text(client->id(), successJson);
+
+          } else if (strncmp(command, "setLeds", 7) == 0) {
+            /* Set New Led Settings */
             /* Parse New LED config */
             JsonArray leds = object["leds"];
 
@@ -118,16 +142,15 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
 
                 /* update value in (eeprom cache) */
                 strlcpy(_led->color, leds[i]["color"] | "#DDEFFF", 8);
-                _led->default_duty = leds[i]["default_duty"].as<int>();
+                _led->default_duty  = leds[i]["default_duty"].as<int>();
+                _led->channel_power = leds[i]["channel_power"].as<int>();
+                _led->state         = leds[i]["state"].as<int>();
 
               }
             }
 
             /* Store EEPROM settings (sync cache and eeprom) */
             CONFIG.setSettings();
-
-            /* Reconfigure network and services */
-            NETWORK.reloadSettings();
 
             ws.text(client->id(), successJson);
 
@@ -169,21 +192,44 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
 
             ws.text(client->id(), successJson);
 
-          } else if (strncmp(command, "setDuty", 7) == 0) {         /* Led Duty */
+          } else if (strncmp(command, "setDuty", 7) == 0) {
+            /* Set Led Duty */
             JsonArray duty = object["duty"];
             for (uint8_t i = 0; i < duty.size(); i++) {
               if (i < MAX_LED_CHANNELS) {
                 uint8_t new_duty = duty[i];
 
                 /* Apply new Duty */
-                SCHEDULE.setChannelDuty(new_duty, i);
+                SCHEDULE.setChannelDuty(i, new_duty);
                 LOG_WEB("[WEBSOCKET] Set Led Duty: new: %d, old: %d\n", new_duty, SCHEDULE.getChannelDuty(i));
               }
             }
 
             ws.text(client->id(), successJson);
+          } else if (strncmp(command, "setState", 8) == 0) {
+            /* Set Led State */
+            JsonArray state = object["state"];
+            for (uint8_t i = 0; i < state.size(); i++) {
+              if (i < MAX_LED_CHANNELS) {
+                uint8_t new_state = state[i];
 
-          } else if (strncmp(command, "setSchedule", 11) == 0) {    /* Schedule */
+                /* Apply new State */
+                SCHEDULE.setChannelState(i, static_cast<channel_state_t>(new_state));
+                LOG_WEB("[WEBSOCKET] Set Led State: new: %d, old: %d\n", new_state, SCHEDULE.getChannelState(i));
+              }
+            }
+
+            ws.text(client->id(), successJson);
+          } else if (strncmp(command, "setBrightness", 13) == 0) {
+            /* Set Light Brightness */
+            uint8_t brightness = object["brightness"].as<int>();
+
+            /* Apply New Light Brightness */
+            SCHEDULE.setBrightness(brightness);
+            LOG_WEB("[WEBSOCKET] Set Light Brightness: %d\n", brightness);
+
+            ws.text(client->id(), successJson);
+          } else if (strncmp(command, "setSchedule", 11) == 0) {    /* Set Schedule */
 
             /* Reset schedule cache */
             for (uint8_t i = 0; i < MAX_SCHEDULE; ++i) {
@@ -199,10 +245,11 @@ void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * clien
                 schedule_t *schedule = CONFIG.getSchedule(i);
 
                 /* update value in (eeprom cache) */
-                schedule->enabled     = schedules[i]["enabled"].as<boolean>();
-                schedule->time_hour   = schedules[i]["time_hour"].as<int>();
-                schedule->time_minute = schedules[i]["time_minute"].as<int>();
-                schedule->active      = true;
+                schedule->enabled         = schedules[i]["enabled"].as<boolean>();
+                schedule->time_hour       = schedules[i]["time_hour"].as<int>();
+                schedule->time_minute     = schedules[i]["time_minute"].as<int>();
+                schedule->active          = true;
+                schedule->led_brightness  = schedules[i]["led_brightness"].as<int>();
 
                 LOG_WEB("[WEBSOCKET] Set Schedule: %d:%d duty size %d\n", schedule->time_hour, schedule->time_minute, schedules[i]["duty"].size());
 
@@ -300,7 +347,7 @@ void WEBUIClass::stringToIP(const char *ip_string, uint8_t *octets) {
   for (int j = 0; j < 4; ++j) {
 
     octets[j] = (uint8_t) atoi(octet);
-    octet = strtok(NULL, ".");
+    octet = strtok(nullptr, ".");
   }
 }
 
@@ -308,7 +355,7 @@ void WEBUIClass::stringToIP(const char *ip_string, uint8_t *octets) {
 void WEBUIClass::settingsJson(char *result, size_t len) {
   LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
 
-  const size_t capacity = JSON_OBJECT_SIZE(15) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
+  const size_t capacity = JSON_OBJECT_SIZE(15) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(6) * MAX_LED_CHANNELS);
   DynamicJsonDocument doc(capacity + 30);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getSettings";
@@ -342,6 +389,8 @@ void WEBUIClass::settingsJson(char *result, size_t len) {
     ledChannel["id"]            = i;
     ledChannel["color"]         = _led->color;
     ledChannel["default_duty"]  = _led->default_duty;
+    ledChannel["channel_power"] = _led->channel_power;
+    ledChannel["state"]         = _led->state;
 
   }
 
@@ -393,8 +442,8 @@ void WEBUIClass::scheduleJson(char *result, size_t len) {
   LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
 
   const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(1)
-      + MAX_SCHEDULE * (JSON_OBJECT_SIZE(4) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS))
-      + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(3) * MAX_LED_CHANNELS);
+                          + MAX_SCHEDULE * (JSON_OBJECT_SIZE(5) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS))
+                          + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
   DynamicJsonDocument doc(capacity + 30);
   JsonObject root = doc.to<JsonObject>();
   root["response"] = "getSchedule";
@@ -410,9 +459,10 @@ void WEBUIClass::scheduleJson(char *result, size_t len) {
     if (schedule->active) {
       JsonObject scheduleItem = schedules.createNestedObject();
 
-      scheduleItem["time_hour"]   = schedule->time_hour;
-      scheduleItem["time_minute"] = schedule->time_minute;
-      scheduleItem["enabled"]     = schedule->enabled;
+      scheduleItem["time_hour"]       = schedule->time_hour;
+      scheduleItem["time_minute"]     = schedule->time_minute;
+      scheduleItem["enabled"]         = schedule->enabled;
+      scheduleItem["led_brightness"]  = schedule->led_brightness;
 
       JsonArray ledDuty = scheduleItem.createNestedArray("duty");
 
@@ -433,6 +483,7 @@ void WEBUIClass::scheduleJson(char *result, size_t len) {
     ledChannel["id"]            = i;
     ledChannel["color"]         = _led->color;
     ledChannel["default_duty"]  = _led->default_duty;
+    ledChannel["channel_power"] = _led->channel_power;
   }
 
   serializeJson(doc, result, len);
@@ -479,26 +530,42 @@ void WEBUIClass::statusJson(char *result, size_t len) {
   serializeJson(doc, result, len);
   LOG_WEB("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\n", ESP.getFreeHeap(), doc.memoryUsage());
 #ifdef DEBUG_WEB_JSON
-    serializeJson(doc, Serial);
-    Serial.println();
+  serializeJson(doc, Serial);
+  Serial.println();
 #endif
 
 }
 
-void WEBUIClass::dutyJson(char *result, size_t len) {
+void WEBUIClass::lightJson(char *result, size_t len) {
 #ifdef DEBUG_WEB
   uint32_t heap = system_get_free_heap_size();
 #endif
 
-  const size_t capacity = JSON_OBJECT_SIZE(2) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
+  const size_t capacity = JSON_OBJECT_SIZE(5) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
   DynamicJsonDocument doc(capacity + 96);
   JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getDuty";
+  root["response"] = "getLight";
 
-  /* Get current leds duty */
-  JsonArray ledDuty = root.createNestedArray("duty");
+  /* Get current brightness */
+  root["brightness"] = SCHEDULE.getBrightness();
+
+  /* Get current channel duty */
+  JsonArray channelDuty= root.createNestedArray("duty");
   for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-    ledDuty.add(SCHEDULE.getChannelDuty(i));
+    channelDuty.add(SCHEDULE.getChannelDuty(i));
+  }
+
+  /* Get Real channel duty */
+  JsonArray channelRealDuty= root.createNestedArray("real_duty");
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+    channelRealDuty.add(SCHEDULE.getChannelRealDuty(i));
+  }
+
+  /* Get current channel state */
+  JsonArray channelState = root.createNestedArray("state");
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+    uint8_t state = SCHEDULE.getChannelState(i);
+    channelState.add(state);
   }
 
   serializeJson(doc, result, len);

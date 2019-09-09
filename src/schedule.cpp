@@ -71,27 +71,37 @@ void ScheduleClass::init() {
   pwm_init(LIGHT_MAX_PWM, pwm_duty_init, PWM_CHANNEL_NUM_MAX, io_info);
   pwm_start();
 
-  /* Apply initial led channel output state */
-  for (unsigned int i=0; i < MAX_LED_CHANNELS; i++) {
-    led_t * led = CONFIG.getLED(i);
-    _leds[i].current_duty = 0;
-    _leds[i].target_duty  = led->default_duty;
-    _leds[i].steps_left   = 50;
-  }
 
-  /* Fill RTC mem packet */
+
+  /* Read RTC MEM packet */
   led_state_rtc_mem_t rtc_mem;
-
-  /* read RTC mem */
   system_rtc_mem_read(64, &rtc_mem, sizeof(rtc_mem));
 
-  /* check Magic if OK, apply */
+  /* Check Magic if OK, apply RTC backup */
   if (rtc_mem.magic_number == RTC_LED_MAGIC) {
-    LOG_SCHEDULE("[SCHEDULE] RTC Magic: %04x\n", rtc_mem.magic_number);
+    LOG_SCHEDULE("[SCHEDULE] RTC Magic is OK: %04x\n", rtc_mem.magic_number);
+
+    /* Restore brightness */
+    brightness = rtc_mem.led_brightness;
 
     for (unsigned int i=0; i < MAX_LED_CHANNELS; i++) {
+      /* Restore channel state */
+      _leds[i].target_state = rtc_mem.target_state[i];
       _leds[i].target_duty = rtc_mem.target_duty[i];
-      LOG_SCHEDULE("[SCHEDULE] GET RTC MEM LED%d target: %d\n", i, _leds[i].target_duty);
+      LOG_SCHEDULE("[SCHEDULE] GET RTC MEM LED %d State: %d Brightness: %d Target: %d\n", i, _leds[i].target_state, brightness, _leds[i].target_duty);
+    }
+  } else {
+    /* Apply initial led channel output state */
+    LOG_SCHEDULE("[SCHEDULE] LOAD LED Defaults from flash\n");
+
+    /* Restore brightness
+     * ToDo: store brightness in flash */
+    brightness = 255;
+
+    for (uint8_t i=0; i < MAX_LED_CHANNELS; i++) {
+      led_t * led = CONFIG.getLED(i);
+      _leds[i].target_state   = static_cast<channel_state_t>(led->state);
+      _leds[i].target_duty    = led->default_duty;
     }
   }
 
@@ -109,53 +119,13 @@ int ScheduleClass::minutesLeft(time_t t, uint8_t schedule_hour, uint8_t schedule
   return (schedule_hour - now_hour) * 60 + schedule_minute - now_minute;
 }
 
-///* Return Nearest schedule point index */
-//uint8_t ScheduleClass::getNearestPoint() {
-//  uint8_t minimal = 0;
-//  bool first_minimal_found = false;
-//
-//  /* Current time */
-//  time_t local_time = now();
-//
-//  for (int i = 0; i < MAX_SCHEDULE; ++i) {
-//
-//    schedule_t *_schedule_a = CONFIG.getSchedule(i);
-//    /* Select only Enabled Points*/
-//    if (_schedule_a->active && _schedule_a->enabled) {
-//
-//      /* current point */
-//      auto left_a = (int)(minutesLeft(local_time, _schedule_a->time_hour, _schedule_a->time_minute));
-//
-//      if (left_a >= 0) {
-//        /* store first active index */
-//        if (!first_minimal_found) {
-//          minimal = i;
-//          first_minimal_found = true;
-//        }
-//
-//        /* last minimal point */
-//        schedule_t *_schedule_b = CONFIG.getSchedule(minimal);
-//        auto left_b = (int)(minutesLeft(local_time, _schedule_b->time_hour, _schedule_b->time_minute));
-//
-//        /* compare points */
-//        if (left_a < left_b) {
-//          /* New minimal found */
-//          minimal = i;
-//        }
-//      }
-//    }
-//  }
-//
-//  return minimal;
-//}
-
 /* Return String in HH:MM format */
 char * ScheduleClass::getCurrentTimeString() {
   return current_time;
 }
 
+/* Light loop */
 void ScheduleClass::loop() {
-
   /* Every second action, check Schedule */
   if (process_schedule) {
     /* wait next timer event */
@@ -167,7 +137,7 @@ void ScheduleClass::loop() {
     auto now_minute = (uint8_t)minute(local_time);
     snprintf(current_time, 6, "%02u:%02u", now_hour, now_minute);
 
-    for (int j = 0; j < MAX_SCHEDULE; ++j) {
+    for (uint8_t j = 0; j < MAX_SCHEDULE; ++j) {
       schedule_t * _schedule = CONFIG.getSchedule(j);
 
       if (_schedule->active && _schedule->enabled)
@@ -185,9 +155,11 @@ void ScheduleClass::loop() {
           /* Set target duty from schedule */
           if (left == 0) {
             for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+              brightness = _schedule->led_brightness;
               _leds[i].target_duty = _schedule->led_duty[i];
-              _leds[i].steps_left  = 50;
-              LOG_SCHEDULE("[SCHEDULE] LED%d current: %d target: %d left: %d\n", i, _leds[i].current_duty, _leds[i].target_duty, left);
+
+              LOG_SCHEDULE("[SCHEDULE] LED %d current: %d target: %d real: %d brightness: %d left: %d\n",
+                  i, _leds[i].current_duty, _leds[i].target_duty, _leds[i].real_duty, _schedule->led_brightness, left);
 
             }
           }
@@ -196,102 +168,63 @@ void ScheduleClass::loop() {
     }
 
     /* check for pending transition */
-    updateLed();
+    updateChannels();
   }
 }
 
-//void ScheduleClass::loop() {
-//
-//  /* Every second action, check Schedule */
-//  if (process_schedule) {
-//    /* wait next timer event */
-//    process_schedule = false;
-//
-//    uint8_t near_point = getNearestPoint();
-//    schedule_t * _schedule = CONFIG.getSchedule(near_point);
-//
-//    if (_schedule->active && _schedule->enabled)
-//    {
-//      /* get local time */
-//      time_t local_time = now();
-//
-//      /* every min check */
-//      if ( (second(local_time) == 0) ) {
-//        /* Count Minutes left */
-//        auto left = (int) (minutesLeft(local_time, _schedule->time_hour, _schedule->time_minute));
-//
-//        /* Next day */
-//        if (left < 0 && near_point == 0) {
-//          left = abs(left) + 24 * 60;
-//        }
-//
-//#ifdef DEBUG_SCHEDULE
-//        char current_time_string[6];
-//        getCurrentTimeString((char *) &current_time_string);
-//
-//        Serial.printf("[SCHEDULE] Now: %s Next: %d:%d Minutes left: %d\n", current_time_string,
-//                      _schedule->time_hour,
-//                      _schedule->time_minute, left);
-//#endif
-//
-//
-//
-//
-//        /* calc channel_transition: variant every min change duty */
-//        for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-//          uint32_t current_duty = pwm_get_duty(i);
-//          uint32_t target_duty  = toPWM(_schedule->led_duty[i]);
-//          _leds[i].current_duty = current_duty;
-//
-//#ifdef DEBUG_SCHEDULE
-//          Serial.printf("[SCHEDULE] LED%d current: %d target: %d left: %d\n", i, current_duty, target_duty, left);
-//#endif
-//
-//          if (left == 0) {
-//            _leds[i].target_duty = target_duty;
-//            _leds[i].steps_left = 1;
-//          } else {
-//            /* calculate PWM change in next min */
-//            double difference = 0.0f + target_duty - current_duty;
-//            double target = fabs(0.0f + _leds[i].current_duty + difference) / (left +1);
-//            _leds[i].target_duty = (uint32_t) target;
-//            _leds[i].steps_left = 50;
-//
-//          }
-//        }
-//      }
-//    }
-//
-//    /* check for pending transition */
-//    updateLed();
-//  }
-//}
-
-void ScheduleClass::updateLed() {
+void ScheduleClass::updateChannels() {
   bool transition = false;
 
-  /* Save Last led channels state in RTC MEM */
-  led_state_rtc_mem_t rtc_mem = {};
-  rtc_mem.magic_number = RTC_LED_MAGIC;
-
   for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-    rtc_mem.target_duty[i] = _leds[i].target_duty;
 
-    /* If target duty != current, start transition */
-    if (_leds[i].current_duty != _leds[i].target_duty) {
-      LOG_SCHEDULE("[SCHEDULE] RTC MEM SET LED%u target: %u\n", i, rtc_mem.target_duty[i]);
+    /* Calc Real Duty */
+    uint8_t real_duty = _leds[i].current_duty * brightness / MAX_BRIGHTNESS;
 
-      /* Save to RTC mem */
-      system_rtc_mem_write(64, &rtc_mem, sizeof(rtc_mem));
+    if (_leds[i].current_duty != _leds[i].target_duty || _leds[i].real_duty != real_duty) {
 
+      /* Setup transition */
+      _leds[i].steps_left = 50;
+      transition = true;
+    }
+
+    /* Channel state changed */
+    if (_leds[i].current_state != _leds[i].target_state) {
+      LOG_SCHEDULE("[SCHEDULE] LED %u State: %u -> %u\n", i, _leds[i].current_state, _leds[i].target_state);
+      /* Setup transition */
+      _leds[i].steps_left = 1;
       transition = true;
     }
   }
 
-  if (transition)
+  /* Start transition */
+  if (transition) {
     transition_timer.attach_ms(10, std::bind(&ScheduleClass::transition, this));
+  }
+
 }
 
+/* Save channel state to RTC Memory */
+void ScheduleClass::saveChannelState() {
+  /* Prepare RTC MEM */
+  led_state_rtc_mem_t rtc_mem = {};
+  rtc_mem.magic_number = RTC_LED_MAGIC;
+  rtc_mem.led_brightness = brightness;
+
+  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
+    /* Save target duty and channel state */
+    rtc_mem.target_duty[i] = _leds[i].target_duty;
+    rtc_mem.target_state[i] = _leds[i].target_state;
+
+    /* Duty or Brightness changed */
+    LOG_SCHEDULE("[SCHEDULE] RTC MEM SET LED %u State: %u Brightness: %u Target: %u\n", i, rtc_mem.target_state[i], rtc_mem.led_brightness, rtc_mem.target_duty[i]);
+
+  }
+
+  /* Save channels to RTC mem */
+  system_rtc_mem_write(64, &rtc_mem, sizeof(rtc_mem));
+}
+
+/* LED channels update status every second, the transition should be faster than this period */
 void ScheduleClass::transition() {
 
   uint32_t steps_left = 0;
@@ -300,6 +233,11 @@ void ScheduleClass::transition() {
     if (_leds[i].steps_left > 0) {
       _leds[i].steps_left--;
 
+      /* Channel State changed */
+      if (_leds[i].current_state != _leds[i].target_state) {
+        _leds[i].current_state = _leds[i].target_state;
+      }
+
       if (_leds[i].steps_left == 0) {
         _leds[i].current_duty = _leds[i].target_duty;
       } else {
@@ -307,52 +245,88 @@ void ScheduleClass::transition() {
         _leds[i].current_duty = (uint32_t) fabs(0.0f + _leds[i].current_duty + difference);
       }
 
-      steps_left = _leds[i].steps_left;
-      pwm_set_duty(toPWM(_leds[i].current_duty), i);
+      /* Calc Real Duty */
+      uint8_t real_duty = _leds[i].current_duty * brightness / MAX_BRIGHTNESS;
+
+      /* Brightness changed */
+      if (_leds[i].real_duty != real_duty) {
+        double difference = (0.0f + real_duty - _leds[i].real_duty) / (_leds[i].steps_left + 1);
+        _leds[i].real_duty = (uint32_t) fabs(0.0f + _leds[i].real_duty + difference);
+      }
+
+      /* Apply Only to Enabled channels, Set 0 to Disabled channels */
+      if (_leds[i].current_state == CHANNEL_ENABLED) {
+        pwm_set_duty(toPWM(_leds[i].real_duty), i);
+      } else {
+        pwm_set_duty(0, i);
+      }
+
+      /* count steps left */
+      steps_left += _leds[i].steps_left;
     }
   }
 
-  /* END Transition */
+  /* END Transition if steps_left CH0 + CH1 + etc = 0 */
   if (steps_left == 0 ) {
+    /* Stop transition */
     transition_timer.detach();
-    publishLedStatusToMqtt();
+
+    /* Publish channel duty */
+    publishChannelDuty();
+    /* Publish channel state */
+    publishChannelState();
+    /* Publish brightness */
+    publishBrightness();
+    /* Save channel state to RTC Memory */
+    saveChannelState();
   }
 
   /* Apply new pwm */
   pwm_start();
-
 }
 
-/* Return 0 -> 255 Duty Value*/
-uint8_t ScheduleClass::getChannelDuty(uint8_t channel) {
-  return _leds[channel].target_duty;
+/* Get channel state */
+channel_state_t ScheduleClass::getChannelState(uint8_t channel) {
+  return _leds[channel].current_state;
 }
 
-void ScheduleClass::setChannelDuty(uint8_t duty, uint8_t channel) {
-  _leds[channel].target_duty  = duty;
-  _leds[channel].steps_left   = 1;
+/* Switch ON/OFF channel */
+void ScheduleClass::setChannelState(uint8_t channel, channel_state_t state) {
+  _leds[channel].target_state = state;
+}
 
-  if (_leds[channel].target_duty != _leds[channel].current_duty) {
-    _leds[channel].steps_left = 50;
+/* Return 0 -> 255 Brightness Value */
+uint8_t ScheduleClass::getBrightness() {
+  return brightness;
+}
+
+/* Set New Brightness Value */
+void ScheduleClass::setBrightness(uint8_t newBrightness) {
+  if (newBrightness != brightness) {
+    brightness = newBrightness;
+  } else {
+    return;
   }
+}
+
+/* Return 0 -> 255 Duty Value */
+uint8_t ScheduleClass::getChannelDuty(uint8_t channel) {
+  return _leds[channel].current_duty;
+}
+
+/* Set New Channel Duty */
+void ScheduleClass::setChannelDuty(uint8_t channel, uint8_t duty) {
+  _leds[channel].target_duty  = duty;
+}
+
+/* Return 0 -> 255 Duty Value */
+uint8_t ScheduleClass::getChannelRealDuty(uint8_t channel) {
+  return _leds[channel].real_duty;
 }
 
 /* Convert from 0 - 255 to 0 - 5000 or 2500 PWM Duty */
 uint32_t ScheduleClass::toPWM(uint8_t value) {
   return value * LIGHT_MAX_PWM / 255;
 }
-
-/* Convert from 0 - 5000 to 0 - 255 Value Duty */
-uint8_t ScheduleClass::fromPWM(uint32_t pwm) {
-  return pwm * 255 / LIGHT_MAX_PWM;
-}
-
-//void ScheduleClass::setScheduleDuty(schedule_t *schedule) {
-//  uint32_t target       = duty * LIGHT_MAX_PWM/100;
-//  uint32_t current_duty = pwm_get_duty(channell);
-//
-//  pwm_set_duty(target, channell);
-//  pwm_start();
-//}
 
 ScheduleClass SCHEDULE;

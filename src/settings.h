@@ -23,7 +23,7 @@
 
 /* EEPROM MAP */
 /* |--  Version  --|--  Auth   --|--  Network   --|--  Services   --|--  LED        --|--  Schedule   --|
- * |--  1x8b     --|--  64x8b  --|--  98x8b     --|--  63x8       --|--  5x3x8b     --|--  12x10x8b   --|
+ * |--  1x8b     --|--  64x8b  --|--  98x8b     --|--  63x8       --|--  5x13x8b    --|--  12x10x8b   --|
  * |--  offset 4 --|--  offset --|--  offset 97 --|--  offset 256 --|--  offset 512 --|--  offset 640 --|
  * */
 
@@ -101,6 +101,8 @@ typedef struct {
   uint8_t magic_number;
   char color[8];                // RGB CSS Hex value FFFFFF -> white
   uint8_t default_duty;         // On Boot safe led duty in percentage (0-100%)
+  uint16_t channel_power;       // Real Channel Power in Watts x 10 (0-65535) 100 = 10.0 in Web UI
+  uint8_t state;                // Enable/Disable channel
 } led_t;
 
 /* Schedule ------------------
@@ -111,21 +113,21 @@ typedef struct {
 
 typedef struct {
   uint8_t  magic_number;
-  uint8_t  time_hour;                 // Schedule fire hour
-  uint8_t  time_minute;               // Schedule fire minutes
-  uint8_t  led_duty[MAX_LED_CHANNELS];// duty in percentage (0-100%)
-  bool     enabled;                   // Enable/Disable this period
-  bool     active;                    // Need send by WS to GUI
+  uint8_t  time_hour;                   // Schedule fire hour
+  uint8_t  time_minute;                 // Schedule fire minutes
+  uint8_t  led_duty[MAX_LED_CHANNELS];  // Duty in percentage (0-100%)
+  uint8_t  led_brightness;              // All channels brightness in percentage (0-100%)
+  bool     enabled;                     // Enable/Disable this period
+  bool     active;                      // Need send by WS to GUI
 } schedule_t;
 
 class Settings {
 
   public:
     void init();
-    void getSettings();
     void setSettings();
     void updateAuth();
-    void erase();
+    static void erase();
 
     /* NTP */
     String getNtpServerName();
@@ -133,7 +135,6 @@ class Settings {
 
     /* LED */
     led_t * getLED(uint8_t id);
-    void setLED(uint8_t id, led_t * _led);
 
     /* Schedule */
     schedule_t * getSchedule(uint8_t id);
@@ -151,11 +152,11 @@ class Settings {
     char * getHostname();
 
   private:
-      auth_t auth;                           // Auth initialization
-      network_t network[MAX_NETWORKS];       // Network initialization
-      services_t service;                    // Services initialization
-      schedule_t schedule[MAX_SCHEDULE];     // Schedule initialization
-      led_t led[MAX_LED_CHANNELS];           // Led initialization
+      auth_t auth = {};;                          // Auth initialization
+      network_t network[MAX_NETWORKS] = {};       // Network initialization
+      services_t service = {};                    // Services initialization
+      schedule_t schedule[MAX_SCHEDULE] = {};     // Schedule initialization
+      led_t led[MAX_LED_CHANNELS] = {};           // Led initialization
       bool _update_requested = false;
 
       /* save to internal flash */

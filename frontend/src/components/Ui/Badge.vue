@@ -1,12 +1,15 @@
 <template>
-  <span class="badge">{{text}}</span>
+  <span class="badge">{{ text }}</span>
 </template>
 
 <script>
 export default {
   name: 'Badge',
   props: {
-    text: [String, Number]
+    text: {
+      type: [String, Number],
+      required: true
+    }
   }
 }
 </script>

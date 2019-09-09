@@ -7,7 +7,7 @@ if (process.env.NODE_ENV === 'production') {
       }
     },
 
-    chainWebpack: config => {
+    chainWebpack: (config) => {
       config.optimization.delete('splitChunks')
     },
 
@@ -18,7 +18,10 @@ if (process.env.NODE_ENV === 'production') {
     parallel: undefined,
     css: { extract: false },
     filenameHashing: false,
-    outputDir: undefined,
+
     // outputDir: '../data'
+    outputDir: undefined,
+
+    lintOnSave: undefined
   }
 }

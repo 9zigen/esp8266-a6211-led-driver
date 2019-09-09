@@ -1,7 +1,14 @@
 <template>
   <label class="switch">
-    <input type="checkbox" v-bind:checked="checked" v-on:change="$emit('change', $event.target.checked)">
-    <span class="slider" :class="round? 'round':''"></span>
+    <input
+      type="checkbox"
+      v-bind:checked="checked"
+      @change="$emit('change', $event.target.checked)"
+    >
+    <span
+      class="slider"
+      v-bind:class="round? 'round':''"
+    />
   </label>
 </template>
 
@@ -13,8 +20,14 @@ export default {
     event: 'change'
   },
   props: {
-    round: Boolean,
-    checked: [Boolean, Number]
+    round: {
+      type: Boolean,
+      default: () => false
+    },
+    checked: {
+      type: [Boolean, Number],
+      default: () => false
+    }
   }
 }
 </script>
@@ -44,8 +57,8 @@ export default {
     right: 0;
     bottom: 0;
     background-color: #ccc;
-    -webkit-channel_transition: .4s;
-    channel_transition: .4s;
+    -webkit-transition: .4s;
+    transition: .4s;
   }
 
   .slider:before {
@@ -56,16 +69,16 @@ export default {
     left: 4px;
     bottom: 4px;
     background-color: white;
-    -webkit-channel_transition: .4s;
-    channel_transition: .4s;
+    -webkit-transition: .4s;
+    transition: .4s;
   }
 
   input:checked + .slider {
-    background-color: #2196F3;
+    background-color: #00d1b2;
   }
 
   input:focus + .slider {
-    box-shadow: 0 0 1px #2196F3;
+    box-shadow: 0 0 1px #00d1b2;
   }
 
   input:checked + .slider:before {

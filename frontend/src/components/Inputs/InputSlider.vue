@@ -1,7 +1,29 @@
 <template>
   <div class="range-slider">
-    <input class="range-slider__range" step="1" v-bind:min="min" v-bind:max="max" type="range" v-bind:value="value" v-on:change="$emit('change', $event.target.value)">
-    <span class="range-slider__value">{{value}}</span>
+    <label class="range-slider__label-min">{{ min }}</label>
+    <input
+      class="range-slider__range"
+      step="1"
+      v-bind:min="min"
+      v-bind:max="max"
+      type="range"
+      v-bind:value="value"
+      v-bind:style="styling"
+      @change="$emit('change', $event.target.value)"
+    >
+    <label class="range-slider__label-max">{{ max }}</label>
+    <span
+      v-if="!showInput"
+      class="range-slider__value"
+      @click="showInput = true"
+    >{{ value }}</span>
+    <input
+      v-if="showInput"
+      type="text"
+      class="range-slider__value"
+      v-bind:value="value"
+      @blur="[$emit('change', $event.target.value), showInput = false]"
+    >
   </div>
 </template>
 
@@ -13,9 +35,34 @@ export default {
     event: 'change'
   },
   props: {
-    value: Number,
-    min: String,
-    max: String
+    value: {
+      type: Number,
+      required: true
+    },
+    min: {
+      type: String,
+      default: () => '0'
+    },
+    max: {
+      type: String,
+      default: () => '100'
+    },
+    color: {
+      type: String,
+      default: () => '#209cee' /* $shade-1 */
+    }
+  },
+  data () {
+    return {
+      showInput: false
+    }
+  },
+  computed: {
+    styling () {
+      return {
+        backgroundColor: this.color
+      }
+    }
   }
 }
 </script>
@@ -105,6 +152,22 @@ export default {
     }
   }
 
+  .range-slider__label-min, .range-slider__label-max {
+    position: absolute;
+    top: -15px;
+    color: $shade-10;
+  }
+
+  .range-slider__label-max {
+    margin-left: -30px;
+  }
+
+  // Range Label
+  input[type='text'].range-slider__value {
+    border: 2px solid;
+    font-size: 1.1em;
+  }
+
   // Range Label
   .range-slider__value {
     display: inline-block;
@@ -130,7 +193,6 @@ export default {
       content: '';
     }
   }
-
 
   // Firefox Overrides
   ::-moz-range-track {

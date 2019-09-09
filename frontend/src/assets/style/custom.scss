@@ -4,13 +4,34 @@
 @import "../../../node_modules/bulma/sass/elements/button.sass";
 @import "../../../node_modules/bulma/sass/elements/container.sass";
 @import "../../../node_modules/bulma/sass/elements/title.sass";
+@import "../../../node_modules/bulma/sass/elements/tag.sass";
 @import "../../../node_modules/bulma/sass/elements/notification.sass";
 @import "../../../node_modules/bulma/sass/form/all.sass";
 @import "../../../node_modules/bulma/sass/components/navbar.sass";
-//@import "../../../node_modules/bulma/sass/components/card.sass";
 @import "../../../node_modules/bulma/sass/components/modal.sass";
 @import "../../../node_modules/bulma/sass/grid/_all.sass";
 @import "../../../node_modules/bulma/sass/layout/section.sass";
+
+#app {
+  font-family: 'Avenir', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  min-height: 100vh;
+  padding-bottom: 25px;
+}
+
+#nav {
+  padding: 30px;
+  a {
+    font-weight: bold;
+    color: #2c3e50;
+    &.router-link-exact-active {
+      color: $primary;
+    }
+  }
+}
 
 .is-active > .navbar-icon {
   color: $green
@@ -18,8 +39,75 @@
 
 .title {
   margin-top: 30px;
+  color: $light;
+}
+
+.subtitle {
+  color: $grey;
 }
 
 .text-left {
   text-align: left;
+}
+
+.control {
+  &.is-text {
+    padding-top: 0.375em;
+    text-align: center;
+  }
+}
+
+/* loading */
+.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: all 1s ease-in-out;
+}
+
+/* Center the loader */
+.loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 60px;
+  height: 60px;
+  margin: -40px 0 0 -40px;
+  border: 8px solid $light;
+  border-radius: 50%;
+  border-top: 8px solid $warning;
+  -webkit-animation: spin 1.5s linear infinite;
+  animation: spin 1.5s linear infinite;
+}
+
+@-webkit-keyframes spin {
+  0% { -webkit-transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.bg-notification {
+  padding: 1.25rem 2.5rem 1.25rem !important;
+}
+
+/* vue transition  LIST */
+.list-item {
+  display: inline-block;
+  margin-right: 10px;
+}
+.list-enter-active {
+  -webkit-transition: all .5s ease-in;
+  transition: all .5s ease-in;
+}
+.list-leave-active {
+  -webkit-transition: all .5s ease-out;
+  transition: all .5s ease-out;
+}
+.list-enter, .list-leave-to /* .list-leave-active до версии 2.1.8 */ {
+  opacity: 0;
+  transform: translateX(-30px);
 }

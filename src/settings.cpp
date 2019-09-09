@@ -119,8 +119,10 @@ void Settings::init() {
     if (led[i].magic_number != (40 + i)) {
       led[i].magic_number = (uint8_t)(40 + i);
 
-      strlcpy(led[i].color, "#DDEFFF", 8); /* dafault color #DDEFFF -> 'Cold White' in UI */
-      led[i].default_duty = 0;             /* 0% -> led off */
+      strlcpy(led[i].color, "#DDEFFF", 8); /* default color #DDEFFF -> 'Cold White' in UI */
+      led[i].default_duty = 0;             /* 0 - 255 -> channel boot duty */
+      led[i].channel_power = 0;            /* 0 ->  0.0 in Watts x 10 */
+      led[i].state = 0;                    /* 0 ->  OFF | 1 -> ON */
 
       /* set default values */
       eepromRotate.put(LED_OFFSET, led);
@@ -137,13 +139,14 @@ void Settings::init() {
     if (schedule[i].magic_number != (50 + i)) {
       schedule[i].magic_number = (uint8_t)(50 + i);
 
-      schedule[i].time_hour    = 0;
-      schedule[i].time_minute  = 0;
-      schedule[i].led_duty[0]  = 0; /* CH1 Default */
-      schedule[i].led_duty[1]  = 0; /* CH2 Default */
-      schedule[i].led_duty[2]  = 0; /* CH3 Default */
-      schedule[i].enabled      = false;
-      schedule[i].active       = false;
+      schedule[i].time_hour       = 0;
+      schedule[i].time_minute     = 0;
+      schedule[i].led_duty[0]     = 0; /* CH1 Default */
+      schedule[i].led_duty[1]     = 0; /* CH2 Default */
+      schedule[i].led_duty[2]     = 0; /* CH3 Default */
+      schedule[i].led_brightness  = 0; /* All Channels brightness */
+      schedule[i].enabled         = false;
+      schedule[i].active          = false;
 
       /* set default values */
       eepromRotate.put(SCHEDULE_OFFSET + sizeof(schedule_t) * i, schedule[i]);
@@ -213,14 +216,6 @@ int16_t Settings::getNtpOffset() {
 led_t * Settings::getLED(uint8_t id) {
   if (id > (MAX_LED_CHANNELS - 1)) id = MAX_LED_CHANNELS - 1;
   return &led[id];
-}
-
-void Settings::setLED(uint8_t id, led_t * _led) {
-  if (id > MAX_LED_CHANNELS - 1) id = MAX_LED_CHANNELS - 1;
-  led[id].color[0] = _led->color[0];
-  led[id].color[1] = _led->color[1];
-  led[id].color[2] = _led->color[2];
-  led[id].default_duty = _led->default_duty;
 }
 
 schedule_t * Settings::getSchedule(uint8_t id) {

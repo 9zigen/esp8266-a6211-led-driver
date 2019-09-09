@@ -3,22 +3,27 @@
     <div class="modal-mask">
       <div class="modal-wrapper">
         <div class="modal-container">
-
           <div class="modal-header">
-            <slot name="header"></slot>
+            <slot name="header" />
           </div>
 
           <div class="modal-body">
-            <slot></slot>
+            <slot />
           </div>
 
           <div class="modal-footer">
             <slot name="footer">
-              <button class="btn" @click="$emit('save')">
+              <button
+                class="btn"
+                @click="$emit('save')"
+              >
                 Save
               </button>
 
-              <button class="btn" @click="$emit('close')">
+              <button
+                class="btn"
+                @click="$emit('close')"
+              >
                 Close
               </button>
             </slot>

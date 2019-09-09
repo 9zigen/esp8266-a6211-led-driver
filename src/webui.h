@@ -13,6 +13,10 @@ s
 #include "ArduinoJson.h"
 #include "FS.h"
 
+#ifndef DEBUG_UI_PORT
+#define DEBUG_UI_PORT Serial
+#endif
+
 #ifdef DEBUG_WEB
 #define LOG_WEB(...) DEBUG_UI_PORT.printf( __VA_ARGS__ )
 #else
@@ -30,7 +34,7 @@ private:
   void networksJson(char *result, size_t len);
   void statusJson(char *result, size_t len);
   void scheduleJson(char *result, size_t len);
-  void dutyJson(char *result, size_t len);
+  void lightJson(char *result, size_t len);
 
   String ipAddressToString(uint8_t *ip);
   void stringToIP(const char *ip_string, uint8_t *octets);
