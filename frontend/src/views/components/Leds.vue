@@ -40,7 +40,7 @@
                 <div class="field">
                   <div class="control">
                     <input
-                      v-model="led.channel_power"
+                      v-model="led.power"
                       class="input"
                       type="text"
                       placeholder="channel power"
@@ -48,30 +48,6 @@
                   </div>
                   <p class="help">
                     Channel Power (Watts)
-                  </p>
-                </div>
-                <div class="field">
-                  <div class="control">
-                    <input
-                      v-model="led.default_duty"
-                      class="input"
-                      type="text"
-                      placeholder="default duty"
-                    >
-                  </div>
-                  <p class="help">
-                    Default Duty (0-255)
-                  </p>
-                </div>
-                <div class="field">
-                  <div class="control has-text-centered">
-                    <toggle-switch
-                      v-model.number="led.state"
-                      round
-                    />
-                  </div>
-                  <p class="help">
-                    Default State ON/OFF
                   </p>
                 </div>
               </div>
@@ -156,7 +132,7 @@
 
       <span
         class="button is-danger"
-        @click="loadSettings"
+        @click="loadLeds"
       >
         <x-icon size="1.5x" /> Cancel
       </span>
@@ -165,9 +141,8 @@
 </template>
 
 <script>
-import { store, mutations } from '@/store'
-import { eventBus } from '@/eventBus'
-import { api } from '@/api'
+import { http } from '@/http'
+import { eventBus } from '../../eventBus'
 
 export default {
   name: 'Leds',
@@ -178,34 +153,24 @@ export default {
     }
   },
   mounted () {
-    eventBus.$on('ledsLoaded', () => {
-      this.loadLeds()
-    })
     this.loadLeds()
   },
-  destroyed () {
-    eventBus.$off('ledsLoaded')
-  },
   methods: {
-    loadLeds () {
-      if (store.settings.leds && store.settings.services) {
-        this.leds = [...store.settings.leds]
-        this.services = store.settings.services
+    async saveLeds () {
+      let response = await http.post('/config/leds', { leds: this.leds })
+      if (response.data.save) {
+        eventBus.$emit('message', 'Saved', 'success')
       } else {
-        api.getSettings()
+        eventBus.$emit('message', 'NOT Saved', 'danger')
       }
     },
-    saveLeds () {
-      mutations.setSettings({ leds: this.leds })
-      api.setLeds()
-    },
-    loadSettings () {
-      api.getSettings()
+    async loadLeds () {
+      let responseLeds = await http.get('/config/leds')
+      this.leds = responseLeds.data.leds
+
+      let responseServices = await http.get('/config/services')
+      this.services = responseServices.data.services
     }
   }
 }
 </script>
-
-<style scoped>
-
-</style>

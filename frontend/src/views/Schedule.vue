@@ -41,54 +41,8 @@
         <div class="column">
           <div class="notification bg-notification is-light">
             <div class="columns is-mobile is-multiline">
-              <!-- Enable -->
-              <div class="column is-4-mobile is-2-tablet">
-                <div class="field">
-                  <div class="control has-text-centered">
-                    <label
-                      v-show="index === 0"
-                      class="label is-hidden-mobile"
-                    >Enable:</label>
-                    <label class="label is-hidden-tablet">Enable:</label>
-                    <toggle-switch
-                      v-model="point.enabled"
-                      round
-                    />
-                  </div>
-                  <p class="help is-hidden-mobile">
-                    ON/OFF
-                  </p>
-                </div>
-              </div>
-
-              <!-- Delete Mobile -->
-              <div class="column is-8 is-hidden-tablet">
-                <div class="field">
-                  <div class="control has-text-centered">
-                    <label
-                      v-show="index === 0"
-                      class="label is-hidden-mobile"
-                    >Action</label>
-                    <label class="label is-hidden-tablet">Action</label>
-                    <div class="buttons has-addons is-centered">
-                      <span
-                        class="button is-primary"
-                        @click="applyTimePoint(index)"
-                      ><check-icon /> Apply Now</span>
-                      <span
-                        class="button is-danger"
-                        @click="deleteTimePoint(index)"
-                      ><x-icon /> Delete</span>
-                    </div>
-                  </div>
-                  <p class="help is-hidden-mobile">
-                    schedule
-                  </p>
-                </div>
-              </div>
-
               <!-- Time -->
-              <div class="column is-12-mobile is-2-tablet is-2-desktop">
+              <div class="column is-6-mobile is-2-tablet is-2-desktop">
                 <div class="field">
                   <div class="control has-text-centered">
                     <label
@@ -111,16 +65,16 @@
               </div>
 
               <!-- Bright -->
-              <div class="column is-12-mobile is-2-tablet">
+              <div class="column is-6-mobile is-2-tablet">
                 <div class="field">
                   <div class="control has-text-centered">
                     <label
                       v-show="index === 0"
                       class="label is-hidden-mobile"
                     >Brightness</label>
-                    <label class="label is-hidden-tablet">Brightness</label>
+                    <label class="label is-hidden-tablet">Brightness %</label>
                     <input
-                      v-model.number="point.led_brightness"
+                      v-model.number="point.brightness"
                       class="input is-primary"
                       type="text"
                       placeholder="Brightness"
@@ -144,8 +98,8 @@
                     <label
                       v-show="index === 0"
                       class="label is-hidden-mobile"
-                    ><span class="is-hidden-tablet-only">CH </span>{{ ledCh }}</label>
-                    <label class="label is-hidden-tablet">CH {{ ledCh }}</label>
+                    ><span class="is-hidden-tablet-only">CH </span>{{ ledCh + 1 }}</label>
+                    <label class="label is-hidden-tablet">CH {{ ledCh + 1 }}</label>
                     <input
                       v-model.number="point.duty[ledCh]"
                       class="input is-primary"
@@ -160,6 +114,26 @@
                 </div>
               </div>
 
+              <!-- Delete Mobile -->
+              <div class="column is-12 is-hidden-tablet">
+                <div class="field has-addons has-addons-centered">
+                  <p class="control">
+                    <span
+                      class="button is-primary"
+                      @click="applyTimePoint(index)"
+                    ><check-icon /> Apply Now</span>
+                  </p>
+
+                  <p class="control">
+                    <span
+                      class="button is-danger"
+                      @click="deleteTimePoint(index)"
+                    ><x-icon /> Delete</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Delete Desktop -->
               <div class="column is-1 is-hidden-mobile">
                 <div class="field">
                   <div class="control has-text-centered">
@@ -175,6 +149,26 @@
                   </div>
                   <p class="help is-hidden-mobile">
                     schedule
+                  </p>
+                </div>
+              </div>
+
+              <!-- Apply Desktop -->
+              <div class="column is-1 is-hidden-mobile">
+                <div class="field">
+                  <div class="control has-text-centered">
+                    <label
+                      v-show="index === 0"
+                      class="label is-hidden-mobile"
+                    >Now</label>
+                    <label class="label is-hidden-tablet">Set</label>
+                    <span
+                      class="button is-primary"
+                      @click="applyTimePoint(index)"
+                    ><check-icon /></span>
+                  </div>
+                  <p class="help is-hidden-mobile">
+                    apply now
                   </p>
                 </div>
               </div>
@@ -203,9 +197,8 @@
 </template>
 
 <script>
-import { store, mutations } from '../store'
 import { eventBus } from '../eventBus'
-import { api } from '../api'
+import { http } from '../http'
 
 export default {
   name: 'Schedule',
@@ -219,16 +212,24 @@ export default {
       labels: [],
       series: [],
       schedule: [],
-      capacity: 0
+      leds: [],
+      capacity: 5
     }
   },
   mounted () {
-    eventBus.$on('scheduleLoaded', () => {
+    (async () => {
+      /* Light schedule */
+      let responseSchedule = await http.get('/config/schedule')
+      this.schedule = responseSchedule.data.schedule
+
+      /* Led color data */
+      let responseLeds = await http.get('/config/leds')
+      this.leds = responseLeds.data.leds
+
+      /* Update chart */
       this.loadSchedule()
-    })
-  },
-  destroyed () {
-    eventBus.$off('scheduleLoaded')
+      this.isLoading = false
+    })()
   },
   methods: {
     timeFormat (value) {
@@ -250,9 +251,9 @@ export default {
     updateSeries () {
       if (this.schedule.length > 0) {
         const _labels = this.schedule.map(v => this.timeToString(v.time_hour, v.time_minute))
-        const _series = store.settings.leds.map((value, index) => ({
+        const _series = this.leds.map((value, index) => ({
           name: `LED CH ${index + 1}`,
-          values: this.schedule.map((v) => v.duty[index] * v.led_brightness / 255)
+          values: this.schedule.map((v) => v.duty[index] * v.brightness / 100)
         }))
 
         this.labels = _labels
@@ -285,12 +286,13 @@ export default {
     addTimePoint () {
       if (this.schedule.length < this.capacity) {
         /* use default duty from settings */
-        const duty = store.settings.leds.map((value) => value.default_duty)
+        const duty = this.leds.map((value) => 0)
 
         this.schedule.push({
           enabled: true,
           time_hour: 0,
           time_minute: 0,
+          brightness: 100,
           duty: [...duty]
         })
         this.updateSeries()
@@ -303,16 +305,13 @@ export default {
       this.schedule.splice(id, 1)
       this.updateSeries()
     },
-    applyTimePoint (id) {
+    async applyTimePoint (id) {
       if (this.schedule[id]) {
         let config = this.schedule[id]
-        api.setBrightness(config.led_brightness)
-        api.setDuty(config.duty)
+        await http.post('/set/brightness', { brightness: config.brightness })
+        await http.post('/set/duty', { duty: config.duty })
+        eventBus.$emit('message', 'Applied', 'success')
       }
-    },
-    saveSchedule () {
-      mutations.setSettings({ schedule: { items: this.schedule } })
-      api.setSchedule()
     },
     timeToString (hour, minute) {
       const _hour = hour < 10 ? `0${hour}` : hour
@@ -325,35 +324,42 @@ export default {
 
     loadSchedule () {
       /* set colors */
-      if (store.settings.leds) {
-        this.colors = store.settings.leds.map((value) => value.color)
+      if (this.leds.length > 0) {
+        this.colors = this.leds.map((value) => value.color)
       }
 
       /* set data */
-      if (store.settings.schedule.items.length > 0) {
+      if (this.schedule.length > 0) {
         /* Sort array by TIME */
-        store.settings.schedule.items.sort((a, b) => (a.time_hour * 60 + a.time_minute) - (b.time_hour * 60 + b.time_minute))
+        this.schedule.sort((a, b) => (a.time_hour * 60 + a.time_minute) - (b.time_hour * 60 + b.time_minute))
 
-        const _labels = store.settings.schedule.items.map(v => this.timeToString(v.time_hour, v.time_minute))
-        const _series = store.settings.leds.map((value, index) => ({
-          name: `LED CH ${index}`,
-          values: store.settings.schedule.items.map((v) => v.duty[index] * v.led_brightness / 255)
+        const _labels = this.schedule.map(v => this.timeToString(v.time_hour, v.time_minute))
+        const _series = this.leds.map((value, index) => ({
+          name: `LED CH ${index + 1}`,
+          values: this.schedule.map((v) => v.duty[index] * v.brightness / 100)
         }))
 
         this.labels = _labels
         this.series = _series
-        this.schedule = [...store.settings.schedule.items]
       }
 
       /* max capacity */
-      if (store.settings.schedule.capacity > 0) { this.capacity = store.settings.schedule.capacity }
+      if (this.schedule.capacity > 0) { this.capacity = this.schedule.capacity }
 
       /* Hide loader */
       eventBus.$emit('loading', false)
     },
-
-    reloadSchedule () {
-      api.getSchedule()
+    async reloadSchedule () {
+      let response = await http.get('/config/schedule')
+      this.schedule = response.data.schedule
+    },
+    async saveSchedule () {
+      let schedule = await http.post('/config/schedule', { schedule: this.schedule })
+      if (schedule.data.save) {
+        eventBus.$emit('message', 'Saved', 'success')
+      } else {
+        eventBus.$emit('message', 'NOT Saved', 'danger')
+      }
     }
   }
 }

@@ -18,17 +18,12 @@
 #define LOG_SCHEDULE(...)
 #endif
 
-#define MAX_BRIGHTNESS 255.0f
+#define MAX_BRIGHTNESS 100
+#define MAX_DUTY       100
 #define RTC_LED_MAGIC 0xAECE00EF
-
-typedef enum  {
-  CHANNEL_DISABLED = 0,
-  CHANNEL_ENABLED
-} channel_state_t;
+#define RTC_LED_ADDR  65
 
 typedef struct {
-  channel_state_t current_state;
-  channel_state_t target_state;
   uint8_t current_duty;
   uint8_t target_duty;
   uint8_t real_duty;
@@ -36,7 +31,6 @@ typedef struct {
 } led_schedule_t;
 
 typedef struct {
-  channel_state_t target_state[MAX_LED_CHANNELS];
   uint8_t target_duty[MAX_LED_CHANNELS];
   uint8_t led_brightness;
   uint32 magic_number;
@@ -51,18 +45,17 @@ public:
   void refresh();
   static char * getCurrentTimeString();
   void loop();
-  channel_state_t getChannelState(uint8_t channel);
-  void setChannelState(uint8_t channel, channel_state_t state);
   uint8_t getChannelDuty(uint8_t channel);
   void setChannelDuty(uint8_t channel, uint8_t duty);
+  uint8_t getTargetChannelDuty(uint8_t id);
   uint8_t getBrightness();
   void setBrightness(uint8_t newBrightness);
   uint8_t getChannelRealDuty(uint8_t channel);
 
 private:
   bool process_schedule = true;
-  uint8_t brightness = 255;
-  led_schedule_t _leds[MAX_LED_CHANNELS] = {};
+  uint8_t brightness = MAX_BRIGHTNESS;
+  led_schedule_t channel[MAX_LED_CHANNELS] = {};
 
   void saveChannelState();
   void updateChannels();

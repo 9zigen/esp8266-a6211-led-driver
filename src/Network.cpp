@@ -196,9 +196,7 @@ void NetworkClass::startAP() {
   /* Start AP */
   WiFi.softAP(services->hostname, auth->password);
   LOG_NETWORK("[NETWORK] AP Started with name: %s and password: %s \n", services->hostname, auth->password);
-
-  IPAddress apIP = WiFi.softAPIP();
-  LOG_NETWORK("[NETWORK] AP IP address: %s \n", apIP.toString().c_str());
+  //LOG_NETWORK("[NETWORK] AP IP address: %s \n", WiFi.softAPIP().c_str());
 }
 
 void NetworkClass::stopAP() {

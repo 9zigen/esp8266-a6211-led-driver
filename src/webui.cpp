@@ -6,6 +6,7 @@
 #include "Arduino.h"
 #include <functional>
 #include <NtpClientLib.h>
+#include "AsyncJson.h"
 #include "ArduinoJson.h"
 #include "settings.h"
 #include "webui.h"
@@ -14,316 +15,469 @@
 #include "Network.h"
 #include "status.h"
 
-AsyncWebSocket ws("/ws");
+/* Public */
 
-// Handle Websocket Requests
-void WEBUIClass::onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
-  if(type == WS_EVT_CONNECT) {
-    LOG_WEB("[WEBSOCKET] Client connection received\n");
-  } else if(type == WS_EVT_DISCONNECT) {
-    LOG_WEB("[WEBSOCKET] Client disconnected\n");
-  } else if(type == WS_EVT_ERROR) {
-    //error was received from the other end
-    os_printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
-  } else if(type == WS_EVT_PONG) {
-    //pong message was received (in response to a ping request maybe)
-    os_printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
-  } else if(type == WS_EVT_DATA) {
-    auto *info = (AwsFrameInfo*)arg;
-    if (info->final && info->index == 0 && info->len == len) {
-      String message = "";
-      if (info->opcode == WS_TEXT) {
-        for (size_t i=0; i<info->len; i++) message += (char)data[i];
-      } else {
-        char buff[3];
-        for (size_t i=0; i<info->len; i++) {
-          sprintf(buff, "%02x ", (uint8_t) data[i]);
-          message += buff ;
-        }
-      }
+void WEBUIClass::init(AsyncWebServer& server) {
+  /* Pages ----------------------------------- */
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send File
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
 
-#ifdef DEBUG_WEB_JSON
-      Serial.println("[WEBSOCKET] Message Received: "+message);
-#endif
+  server.on("/schedule", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send File
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
 
-      StaticJsonDocument<2000> doc;
-      DeserializationError err = deserializeJson(doc, message);
-      if (err) {
-#ifdef DEBUG_WEB
-        Serial.println(F("deserializeJson() failed: "));
-        Serial.println(err.c_str());
-#endif
-      } else {
-        JsonObject object = doc.as<JsonObject>();
-        const char * command      = object["command"];
-        const char * successJson  = R"({"response":"success"})";
-        const char * pongJson     = R"({"response":"pong"})";
+  server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send File
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
 
-        if(command != nullptr) {
-          LOG_WEB("[WEBSOCKET] Got %s Command from Client %u \n", command, client->id());
+  server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send File
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
 
-          char response[1024];
-          memset(response, 0, 1024);
+  server.on("/about", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send File
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
 
-          if (strncmp(command, "ping", 4) == 0) {
-            /* Ping */
-            ws.text(client->id(), pongJson);
 
-          } else if (strncmp(command, "erase", 5) == 0) {
-            /* Erase EEPROM */
-            CONFIG.erase();
-            ws.text(client->id(), successJson);
+  /* JSON ------------------------------------ */
+  /* GET device status */
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant &root = response->getRoot();
 
-            /* Reboot */
-            ESP.restart();
+    /* Device specific */
+    root["hardware"] = HARDWARE;
 
-          } else if (strncmp(command, "getStatus", 9) == 0) {
-            /* Get Status */
-            WEBUI.statusJson((char *) &response, sizeof(response));
-            ws.text(client->id(), response);
+    /* Get service config */
+    services_t *service = CONFIG.getService();
+    root["mqttService"] = IPAddress(service->mqtt_server).toString();
+    root["ntpService"] = service->ntp_server;
 
-          } else if (strncmp(command, "getSchedule", 11) == 0) {
-            /* Get Schedule */
-            WEBUI.scheduleJson((char *) &response, sizeof(response));
-            ws.text(client->id(), response);
+    /* Get device info, refresh periodical */
+    status_t *device_info = getDeviceInfo();
 
-          } else if (strncmp(command, "getNetworks", 11) == 0) {
-            /* Get Networks */
-            WEBUI.networksJson((char *) &response, sizeof(response));
-            ws.text(client->id(), response);
+    root["upTime"] = NTP.getUptimeString();
+    root["localTime"] = SCHEDULE.getCurrentTimeString();
+    root["chipId"] = device_info->chip_id;
+    root["cpuFreq"] = device_info->cpu_freq;
+    root["vcc"] = device_info->vcc;
+    root["freeHeap"] = device_info->free_heap;
+    root["wifiMode"] = device_info->wifi_mode;
+    root["ipAddress"] = device_info->ip_address;
+    root["macAddress"] = device_info->mac_address;
+    root["brightness"] = SCHEDULE.getBrightness();
 
-          } else if (strncmp(command, "getLight", 8) == 0) {
-            /* Get Current light status (duty + brightness) */
-            WEBUI.lightJson((char *) &response, sizeof(response));
-            ws.text(client->id(), response);
+    JsonArray leds = root.createNestedArray("channels");
+    for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
+      leds.add(SCHEDULE.getChannelDuty(i));
+    }
 
-          } else if (strncmp(command, "getSettings", 11) == 0) {
-            /* Get Settings (Led color + NTP, MQTT) */
-            WEBUI.settingsJson((char *) &response, sizeof(response));
-            ws.text(client->id(), response);
+    response->setLength();
+    request->send(response);
+  });
 
-          } else if (strncmp(command, "setServices", 11) == 0) {
-            /* Set New Services */
-            /* Parse Services config */
-            JsonObject services = object["services"];
+  /* GET led channels schedule config */
+  server.on("/config/schedule", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
 
-            /* get point to current services config (eeprom cache) */
-            services_t *service = CONFIG.getService();
-            strlcpy(service->hostname, services["hostname"] | "", 20);
-            strlcpy(service->ntp_server_name, services["ntp_server_name"] | "es.pool.ntp.org", 20);
-            strlcpy(service->mqtt_user, services["mqtt_user"] | "", 16);
-            strlcpy(service->mqtt_password, services["mqtt_password"] | "", 16);
-            WEBUI.stringToIP(services["mqtt_ip_address"], service->mqtt_ip_address);
-            service->mqtt_port           = services["mqtt_port"].as<int>();
-            service->mqtt_qos            = services["mqtt_qos"].as<int>();
-            service->utc_offset_minutes  = services["utc_offset_minutes"].as<int>();
-            service->ntp_dst             = services["ntp_dst"].as<boolean>();
-            service->enable_ntp_service  = services["enable_ntp_service"].as<boolean>();
-            service->enable_mqtt_service = services["enable_mqtt_service"].as<boolean>();
+    /* Schedule */
+    JsonArray schedule = root.createNestedArray("schedule");
+    for (uint8_t i = 0; i < MAX_SCHEDULE; i++)
+    {
+      /* Get One schedule */
+      schedule_t *_schedule = CONFIG.getSchedule(i);
+      if (_schedule->active) {
+        JsonObject scheduleItem = schedule.createNestedObject();
 
-            /* Store EEPROM settings (sync cache and eeprom) */
-            CONFIG.setSettings();
+        scheduleItem["time_hour"]       = _schedule->time_hour;
+        scheduleItem["time_minute"]     = _schedule->time_minute;
+        scheduleItem["brightness"]      = _schedule->brightness;
 
-            /* Reconfigure network and services */
-            NETWORK.reloadSettings();
+        JsonArray ledDuty = scheduleItem.createNestedArray("duty");
 
-            ws.text(client->id(), successJson);
-
-          } else if (strncmp(command, "setLeds", 7) == 0) {
-            /* Set New Led Settings */
-            /* Parse New LED config */
-            JsonArray leds = object["leds"];
-
-            for (uint8_t i = 0; i < leds.size(); ++i) {
-              if (i < MAX_LED_CHANNELS) {
-
-                /* get point to current led config (eeprom cache) */
-                led_t *_led = CONFIG.getLED(i);
-
-                /* update value in (eeprom cache) */
-                strlcpy(_led->color, leds[i]["color"] | "#DDEFFF", 8);
-                _led->default_duty  = leds[i]["default_duty"].as<int>();
-                _led->channel_power = leds[i]["channel_power"].as<int>();
-                _led->state         = leds[i]["state"].as<int>();
-
-              }
-            }
-
-            /* Store EEPROM settings (sync cache and eeprom) */
-            CONFIG.setSettings();
-
-            ws.text(client->id(), successJson);
-
-          } else if (strncmp(command, "setNetworks", 11) == 0) {    /* New WiFi Settings */
-            /* Reset network cache */
-            for (uint8_t i = 0; i < MAX_NETWORKS; i++) {
-              network_t *network = CONFIG.getNetwork(i);
-              network->active = false;
-            }
-
-            /* Parse New NETWORK config */
-            JsonArray networks = object["networks"];
-            for (uint8_t i = 0; i < networks.size(); i++) {
-              if (i < MAX_NETWORKS) {
-                /* get point to current network config (eeprom cache) */
-                network_t *network = CONFIG.getNetwork(i);
-
-                strlcpy(network->ssid, networks[i]["ssid"] | " ", 32);
-                strlcpy(network->password, networks[i]["password"] | " ", 32);
-
-                /* split ip address to 4x uint8_t */
-                WEBUI.stringToIP(networks[i]["ip_address"], network->ip_address);
-                WEBUI.stringToIP(networks[i]["mask"], network->mask);
-                WEBUI.stringToIP(networks[i]["gateway"], network->gateway);
-                WEBUI.stringToIP(networks[i]["dns"], network->dns);
-
-                network->dhcp = networks[i]["dhcp"].as<bool>();
-                network->active = true;
-                LOG_WEB("[WEBSOCKET] ssid: %s password: %s\n", network->ssid, network->password);
-
-              }
-            }
-
-            /* Store EEPROM settings (sync cache and eeprom) */
-            CONFIG.setSettings();
-
-            /* Reload WiFi settings */
-            NETWORK.reloadSettings();
-
-            ws.text(client->id(), successJson);
-
-          } else if (strncmp(command, "setDuty", 7) == 0) {
-            /* Set Led Duty */
-            JsonArray duty = object["duty"];
-            for (uint8_t i = 0; i < duty.size(); i++) {
-              if (i < MAX_LED_CHANNELS) {
-                uint8_t new_duty = duty[i];
-
-                /* Apply new Duty */
-                SCHEDULE.setChannelDuty(i, new_duty);
-                LOG_WEB("[WEBSOCKET] Set Led Duty: new: %d, old: %d\n", new_duty, SCHEDULE.getChannelDuty(i));
-              }
-            }
-
-            ws.text(client->id(), successJson);
-          } else if (strncmp(command, "setState", 8) == 0) {
-            /* Set Led State */
-            JsonArray state = object["state"];
-            for (uint8_t i = 0; i < state.size(); i++) {
-              if (i < MAX_LED_CHANNELS) {
-                uint8_t new_state = state[i];
-
-                /* Apply new State */
-                SCHEDULE.setChannelState(i, static_cast<channel_state_t>(new_state));
-                LOG_WEB("[WEBSOCKET] Set Led State: new: %d, old: %d\n", new_state, SCHEDULE.getChannelState(i));
-              }
-            }
-
-            ws.text(client->id(), successJson);
-          } else if (strncmp(command, "setBrightness", 13) == 0) {
-            /* Set Light Brightness */
-            uint8_t brightness = object["brightness"].as<int>();
-
-            /* Apply New Light Brightness */
-            SCHEDULE.setBrightness(brightness);
-            LOG_WEB("[WEBSOCKET] Set Light Brightness: %d\n", brightness);
-
-            ws.text(client->id(), successJson);
-          } else if (strncmp(command, "setSchedule", 11) == 0) {    /* Set Schedule */
-
-            /* Reset schedule cache */
-            for (uint8_t i = 0; i < MAX_SCHEDULE; ++i) {
-              schedule_t *schedule = CONFIG.getSchedule(i);
-              schedule->active = false;
-            }
-
-            /* Parse New Schedule config */
-            JsonArray schedules = object["schedule"];
-            for (uint8_t i = 0; i < schedules.size(); ++i) {
-              if (i < MAX_SCHEDULE) {
-                /* get point to current schedule config (eeprom cache) */
-                schedule_t *schedule = CONFIG.getSchedule(i);
-
-                /* update value in (eeprom cache) */
-                schedule->enabled         = schedules[i]["enabled"].as<boolean>();
-                schedule->time_hour       = schedules[i]["time_hour"].as<int>();
-                schedule->time_minute     = schedules[i]["time_minute"].as<int>();
-                schedule->active          = true;
-                schedule->led_brightness  = schedules[i]["led_brightness"].as<int>();
-
-                LOG_WEB("[WEBSOCKET] Set Schedule: %d:%d duty size %d\n", schedule->time_hour, schedule->time_minute, schedules[i]["duty"].size());
-
-                for (uint8_t j = 0; j < schedules[i]["duty"].size(); ++j) {
-                  if (j < MAX_LED_CHANNELS)
-                  {
-                    schedule->led_duty[j] = schedules[i]["duty"][j].as<int>();
-                  }
-                }
-              }
-            }
-
-            /* Store EEPROM settings (sync cache and eeprom) */
-            CONFIG.setSettings();
-
-            ws.text(client->id(), successJson);
-
-          } else if (strncmp(command, "reboot", 6) == 0) {
-            ws.text(client->id(), successJson);
-            ESP.restart();
-
-          }
-        } else {
-          LOG_WEB("[WEBSOCKET] Invalid Command");
+        for (unsigned char p : _schedule->channel) {
+          ledDuty.add(p); // led channel
         }
       }
     }
-  }
-}
 
-
-/* Public */
-
-void WEBUIClass::init(AsyncWebServer& server){
-
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    // Send File
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
-    response->addHeader("Content-Encoding","gzip");
+    response->setLength();
     request->send(response);
   });
 
-  server.on("/schedule", HTTP_GET, [](AsyncWebServerRequest *request){
-    // Send File
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
-    response->addHeader("Content-Encoding","gzip");
+  /* SET led channels schedule config */
+  AsyncCallbackJsonWebHandler* schedule_handler = new AsyncCallbackJsonWebHandler("/config/schedule", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
+
+    /* Reset schedule cache */
+    for (uint8_t i = 0; i < MAX_SCHEDULE; ++i) {
+      schedule_t *schedule = CONFIG.getSchedule(i);
+      schedule->active = false;
+    }
+
+    /* Parse New Schedule config */
+    JsonArray schedules = jsonObj["schedule"];
+    for (uint8_t i = 0; i < schedules.size(); ++i) {
+      if (i < MAX_SCHEDULE) {
+        /* get point to current schedule config (eeprom cache) */
+        schedule_t *schedule = CONFIG.getSchedule(i);
+
+        /* update value in (eeprom cache) */
+        schedule->time_hour       = schedules[i]["time_hour"].as<int>();
+        schedule->time_minute     = schedules[i]["time_minute"].as<int>();
+        schedule->active          = true;
+        schedule->brightness  = schedules[i]["brightness"].as<int>();
+
+        LOG_WEB("[WEBSERVER] Set Schedule: %d:%d\n", schedule->time_hour, schedule->time_minute);
+
+        for (uint8_t j = 0; j < schedules[i]["duty"].size(); ++j) {
+          if (j < MAX_LED_CHANNELS)
+          {
+            schedule->channel[j] = schedules[i]["duty"][j].as<int>();
+          }
+        }
+      }
+    }
+
+    /* Store EEPROM settings (sync cache and eeprom) */
+    CONFIG.setSettings();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["save"].set(true);
+
+    response->setLength();
     request->send(response);
   });
 
-  server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest *request){
-    // Send File
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
-    response->addHeader("Content-Encoding","gzip");
+  /* GET led channels config */
+  server.on("/config/leds", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    /* Leds */
+    JsonArray leds = root.createNestedArray("leds");
+    for (uint8_t i = 0; i < MAX_LED_CHANNELS; i++) {
+      JsonObject ledChannel = leds.createNestedObject();
+      /* Get single led channel config */
+      led_t *_led = CONFIG.getLED(i);
+
+      ledChannel["id"]        = i;
+      ledChannel["color"]     = _led->color;
+      ledChannel["power"]     = _led->power;
+      ledChannel["state"]     = _led->state;
+      ledChannel["last_duty"] = _led->last_duty;
+    }
+
+    response->setLength();
     request->send(response);
   });
 
-  server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
-    // Send File
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
-    response->addHeader("Content-Encoding","gzip");
+  /* SET led channels schedule config */
+  AsyncCallbackJsonWebHandler* leds_handler = new AsyncCallbackJsonWebHandler("/config/leds", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
+
+    /* Parse New LED config */
+    JsonArray leds = jsonObj["leds"];
+
+    for (uint8_t i = 0; i < leds.size(); ++i) {
+      if (i < MAX_LED_CHANNELS) {
+
+        /* get point to current led config (eeprom cache) */
+        led_t *_led = CONFIG.getLED(i);
+
+        /* update value in (eeprom cache) */
+        strlcpy(_led->color, leds[i]["color"] | "#DDEFFF", 8);
+        _led->last_duty     = leds[i]["last_duty"].as<int>();
+        _led->power         = leds[i]["power"].as<int>();
+        _led->state         = leds[i]["state"].as<int>();
+      }
+    }
+
+    /* Store EEPROM settings (sync cache and eeprom) */
+    CONFIG.setSettings();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["save"].set(true);
+
+    response->setLength();
     request->send(response);
   });
 
-  server.on("/about", HTTP_GET, [](AsyncWebServerRequest *request){
-    // Send File
-    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
-    response->addHeader("Content-Encoding","gzip");
+  /* GET services config */
+  server.on("/config/services", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    /* Services */
+    JsonObject services = root.createNestedObject("services");
+
+    /* Get service config */
+    services_t *service = CONFIG.getService();
+
+    services["hostname"]            = service->hostname;
+    services["ntp_server"]          = service->ntp_server;
+    services["utc_offset"]          = service->utc_offset;
+    services["ntp_dst"]             = service->ntp_dst;
+    services["mqtt_server"]         = IPAddress(service->mqtt_server).toString();
+    services["mqtt_port"]           = service->mqtt_port;
+    services["mqtt_qos"]            = service->mqtt_qos;
+    services["mqtt_user"]           = service->mqtt_user;
+    services["mqtt_password"]       = service->mqtt_password;
+    services["enable_ntp"]          = service->enable_ntp;
+    services["enable_mqtt"]         = service->enable_mqtt;
+
+    response->setLength();
     request->send(response);
   });
 
-  server.addHandler(&ws);
+  /* SET services config */
+  AsyncCallbackJsonWebHandler* services_handler = new AsyncCallbackJsonWebHandler("/config/services", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
 
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
+    /* Parse Services config */
+    JsonObject services = jsonObj["services"];
+
+    /* get point to current services config (eeprom cache) */
+    services_t *service = CONFIG.getService();
+    strlcpy(service->hostname, services["hostname"] | "", 20);
+    strlcpy(service->ntp_server, services["ntp_server"] | "es.pool.ntp.org", 20);
+    strlcpy(service->mqtt_user, services["mqtt_user"] | "", 16);
+    strlcpy(service->mqtt_password, services["mqtt_password"] | "", 16);
+    WEBUI.stringToIP(services["mqtt_server"], service->mqtt_server);
+    service->mqtt_port           = services["mqtt_port"].as<int>();
+    service->mqtt_qos            = services["mqtt_qos"].as<int>();
+    service->utc_offset          = services["utc_offset"].as<int>();
+    service->ntp_dst             = services["ntp_dst"].as<boolean>();
+    service->enable_ntp          = services["enable_ntp"].as<boolean>();
+    service->enable_mqtt         = services["enable_mqtt"].as<boolean>();
+
+    /* Store EEPROM settings (sync cache and eeprom) */
+    CONFIG.setSettings();
+
+    /* Reconfigure network and services */
+    NETWORK.reloadSettings();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+
+    root["save"].set(true);
+
+#ifdef DEBUG_WEB_JSON
+    serializeJson(root, Serial);
+    Serial.println();
+#endif
+
+    response->setLength();
+    request->send(response);
+  });
+
+  /* GET Networks config */
+  server.on("/config/networks", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["capacity"] = MAX_NETWORKS;
+
+    /* Networks */
+    JsonArray networks = root.createNestedArray("networks");
+    for (uint8_t i = 0; i < MAX_NETWORKS; i++) {
+      /* Get single networks config */
+      network_t *network = CONFIG.getNetwork(i);
+
+      if (network->active) {
+        JsonObject networkConfig    = networks.createNestedObject();
+        networkConfig["id"]         = i;
+        networkConfig["ssid"]       = network->ssid;
+        networkConfig["password"]   = network->password;
+        networkConfig["ip_address"] = IPAddress(network->ip_address).toString();
+        networkConfig["mask"]       = IPAddress(network->mask).toString();
+        networkConfig["gateway"]    = IPAddress(network->gateway).toString();
+        networkConfig["dns"]        = IPAddress(network->dns).toString();
+        networkConfig["dhcp"]       = network->dhcp;
+      }
+    }
+
+    response->setLength();
+    request->send(response);
+  });
+
+  /* SET Networks config */
+  AsyncCallbackJsonWebHandler* networks_handler = new AsyncCallbackJsonWebHandler("/config/networks", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
+
+    /* Reset network cache */
+    for (uint8_t i = 0; i < MAX_NETWORKS; i++) {
+      network_t *network = CONFIG.getNetwork(i);
+      network->active = false;
+    }
+
+    /* Parse New NETWORK config */
+    JsonArray networks = jsonObj["networks"];
+    for (uint8_t i = 0; i < networks.size(); i++) {
+      if (i < MAX_NETWORKS) {
+        /* get point to current network config (eeprom cache) */
+        network_t *network = CONFIG.getNetwork(i);
+
+        strlcpy(network->ssid, networks[i]["ssid"] | " ", 32);
+        strlcpy(network->password, networks[i]["password"] | " ", 32);
+
+        /* split ip address to 4x uint8_t */
+        WEBUI.stringToIP(networks[i]["ip_address"], network->ip_address);
+        WEBUI.stringToIP(networks[i]["mask"], network->mask);
+        WEBUI.stringToIP(networks[i]["gateway"], network->gateway);
+        WEBUI.stringToIP(networks[i]["dns"], network->dns);
+
+        network->dhcp = networks[i]["dhcp"].as<bool>();
+        network->active = true;
+        LOG_WEB("[WEBSOCKET] ssid: %s password: %s\n", network->ssid, network->password);
+
+      }
+    }
+
+    /* Store EEPROM settings (sync cache and eeprom) */
+    CONFIG.setSettings();
+
+    /* Reload WiFi settings */
+    NETWORK.reloadSettings();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["save"].set(true);
+
+    response->setLength();
+    request->send(response);
+  });
+
+  /* ----- Set: Duty at Home page ----- */
+  AsyncCallbackJsonWebHandler* duty_handler = new AsyncCallbackJsonWebHandler("/set/duty", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
+    JsonArray duty = jsonObj["duty"];
+
+    for (uint8_t i = 0; i < duty.size(); i++) {
+      if (i < MAX_LED_CHANNELS) {
+        uint8_t new_duty = duty[i];
+
+        /* Apply new Channel Duty */
+        SCHEDULE.setChannelDuty(i, new_duty);
+        LOG_WEB("[WEBSERVER] Set Led Duty: new: %d, old: %d\n", new_duty, SCHEDULE.getChannelDuty(i));
+      }
+    }
+
+    /* Send Response */
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+
+    JsonArray leds = root.createNestedArray("duty");
+    for (int i = 0; i < MAX_LED_CHANNELS; ++i) {
+      leds.add(SCHEDULE.getTargetChannelDuty(i));
+    }
+
+    response->setLength();
+    request->send(response);
+  });
+
+  /* ----- Set: Brightness at Home page ----- */
+  AsyncCallbackJsonWebHandler* brightness_handler = new AsyncCallbackJsonWebHandler("/set/brightness", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    JsonObject jsonObj = json.as<JsonObject>();
+    JsonVariant brightness = jsonObj["brightness"];
+
+    /* Apply new Brightness */
+    SCHEDULE.setBrightness(brightness.as<int>());
+
+    LOG_WEB("[WEBSERVER] Set Brightness: %d\n", brightness.as<int>());
+
+    /* Send Response */
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+    root.set(SCHEDULE.getBrightness());
+
+    response->setLength();
+    request->send(response);
+
+  });
+
+  /* Reboot */
+  server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    /* Reboot */
+    ESP.restart();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["success"].set(true);
+
+    response->setLength();
+    request->send(response);
+  });
+
+  /* Factory reset */
+  server.on("/factory", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    /* Erase EEPROM */
+    CONFIG.erase();
+
+    // Send Json Response
+    AsyncJsonResponse *response = new AsyncJsonResponse();
+    JsonVariant& root = response->getRoot();
+
+    root["success"].set(true);
+
+    response->setLength();
+    request->send(response);
+  });
+
+  server.addHandler(schedule_handler);
+  server.addHandler(leds_handler);
+  server.addHandler(services_handler);
+  server.addHandler(networks_handler);
+  server.addHandler(duty_handler);
+  server.addHandler(brightness_handler);
+
+  /* CORS */
+//  server.onNotFound([](AsyncWebServerRequest *request) {
+//    if (request->method() == HTTP_OPTIONS) {
+//      request->send(200);
+//    } else {
+//      request->send(404);
+//    }
+//  });
+
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
 }
 
 /* Private */
@@ -349,232 +503,6 @@ void WEBUIClass::stringToIP(const char *ip_string, uint8_t *octets) {
     octets[j] = (uint8_t) atoi(octet);
     octet = strtok(nullptr, ".");
   }
-}
-
-/* Return JSON string with current device settings */
-void WEBUIClass::settingsJson(char *result, size_t len) {
-  LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
-
-  const size_t capacity = JSON_OBJECT_SIZE(15) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(6) * MAX_LED_CHANNELS);
-  DynamicJsonDocument doc(capacity + 30);
-  JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getSettings";
-
-  /* Services */
-  JsonObject services = root.createNestedObject("services");
-
-  /* Get service config */
-  services_t *service = CONFIG.getService();
-
-  services["hostname"]            = service->hostname;
-  services["ntp_server_name"]     = service->ntp_server_name;
-  services["utc_offset_minutes"]  = service->utc_offset_minutes;
-  services["ntp_dst"]             = service->ntp_dst;
-  services["mqtt_ip_address"]     = ipAddressToString(service->mqtt_ip_address);
-  services["mqtt_port"]           = service->mqtt_port;
-  services["mqtt_qos"]            = service->mqtt_qos;
-  services["mqtt_user"]           = service->mqtt_user;
-  services["mqtt_password"]       = service->mqtt_password;
-  services["enable_ntp_service"]  = service->enable_ntp_service;
-  services["enable_mqtt_service"] = service->enable_mqtt_service;
-
-  /* Led */
-  JsonArray leds = root.createNestedArray("leds");
-  for (uint8_t i = 0; i < MAX_LED_CHANNELS; i++) {
-
-    JsonObject ledChannel = leds.createNestedObject();
-    /* Get single led channel config */
-    led_t *_led = CONFIG.getLED(i);
-
-    ledChannel["id"]            = i;
-    ledChannel["color"]         = _led->color;
-    ledChannel["default_duty"]  = _led->default_duty;
-    ledChannel["channel_power"] = _led->channel_power;
-    ledChannel["state"]         = _led->state;
-
-  }
-
-  serializeJson(doc, result, len);
-  LOG_WEB("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\n", ESP.getFreeHeap(), doc.memoryUsage());
-#ifdef DEBUG_WEB_JSON
-  serializeJson(doc, Serial);
-  Serial.println();
-#endif
-}
-
-void WEBUIClass::networksJson(char *result, size_t len) {
-  LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
-
-  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_NETWORKS) + JSON_OBJECT_SIZE(9) * MAX_NETWORKS;
-  DynamicJsonDocument doc(capacity + 30);
-  JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getNetworks";
-  root["capacity"] = MAX_NETWORKS;
-
-  /* Networks */
-  JsonArray networks = root.createNestedArray("networks");
-  for (uint8_t i = 0; i < MAX_NETWORKS; i++) {
-    /* Get single networks config */
-    network_t *network = CONFIG.getNetwork(i);
-
-    if (network->active) {
-      JsonObject networkConfig    = networks.createNestedObject();
-      networkConfig["id"]         = i;
-      networkConfig["ssid"]       = network->ssid;
-      networkConfig["password"]   = network->password;
-      networkConfig["ip_address"] = ipAddressToString(network->ip_address);
-      networkConfig["mask"]       = ipAddressToString(network->mask);
-      networkConfig["gateway"]    = ipAddressToString(network->gateway);
-      networkConfig["dns"]        = ipAddressToString(network->dns);
-      networkConfig["dhcp"]       = network->dhcp;
-    }
-  }
-
-  serializeJson(doc, result, len);
-  LOG_WEB("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\n", ESP.getFreeHeap(), doc.memoryUsage());
-#ifdef DEBUG_WEB_JSON
-  serializeJson(doc, Serial);
-  Serial.println();
-#endif
-}
-
-void WEBUIClass::scheduleJson(char *result, size_t len) {
-  LOG_WEB("[JSON] Free HEAP Before Serialization: %d\n", ESP.getFreeHeap());
-
-  const size_t capacity = JSON_OBJECT_SIZE(3) + JSON_OBJECT_SIZE(1)
-                          + MAX_SCHEDULE * (JSON_OBJECT_SIZE(5) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS))
-                          + JSON_OBJECT_SIZE(1) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + (JSON_OBJECT_SIZE(4) * MAX_LED_CHANNELS);
-  DynamicJsonDocument doc(capacity + 30);
-  JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getSchedule";
-  root["capacity"] = MAX_SCHEDULE;
-
-  /* Schedule */
-  JsonArray schedules = root.createNestedArray("schedule");
-  for (uint8_t i = 0; i < MAX_SCHEDULE; i++) {
-
-    /* Get One schedule */
-    schedule_t *schedule = CONFIG.getSchedule(i);
-
-    if (schedule->active) {
-      JsonObject scheduleItem = schedules.createNestedObject();
-
-      scheduleItem["time_hour"]       = schedule->time_hour;
-      scheduleItem["time_minute"]     = schedule->time_minute;
-      scheduleItem["enabled"]         = schedule->enabled;
-      scheduleItem["led_brightness"]  = schedule->led_brightness;
-
-      JsonArray ledDuty = scheduleItem.createNestedArray("duty");
-
-      for (unsigned char p : schedule->led_duty) {
-        ledDuty.add(p); // led channel
-      }
-    }
-  }
-
-  /* Led */
-  JsonArray leds = root.createNestedArray("leds");
-  for (uint8_t i = 0; i < MAX_LED_CHANNELS; i++) {
-
-    JsonObject ledChannel = leds.createNestedObject();
-    /* Get single led channel config */
-    led_t *_led = CONFIG.getLED(i);
-
-    ledChannel["id"]            = i;
-    ledChannel["color"]         = _led->color;
-    ledChannel["default_duty"]  = _led->default_duty;
-    ledChannel["channel_power"] = _led->channel_power;
-  }
-
-  serializeJson(doc, result, len);
-  LOG_WEB("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\n", ESP.getFreeHeap(), doc.memoryUsage());
-#ifdef DEBUG_WEB_JSON
-  serializeJson(doc, Serial);
-  Serial.println();
-#endif
-
-}
-
-void WEBUIClass::statusJson(char *result, size_t len) {
-  LOG_WEB("[JSON] Free HEAP Before Serialization: %d \n", ESP.getFreeHeap());
-
-  const size_t capacity = JSON_OBJECT_SIZE(14);
-  DynamicJsonDocument doc(capacity + 200);
-  JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getStatus";
-
-  /* Status */
-  JsonObject status = root.createNestedObject("status");
-
-  /* Device specific */
-  status["hardware"] = HARDWARE;
-
-  /* Get service config */
-  services_t *service = CONFIG.getService();
-  status["mqttService"]       = ipAddressToString(service->mqtt_ip_address);
-  status["ntpService"]        = service->ntp_server_name;
-
-  /* Get device info, refresh periodical */
-  status_t * device_info = getDeviceInfo();
-
-  status["upTime"]            = NTP.getUptimeString();
-  status["localTime"]         = SCHEDULE.getCurrentTimeString();
-  status["chipId"]            = device_info->chip_id;
-  status["cpuFreq"]           = device_info->cpu_freq;
-  status["vcc"]               = device_info->vcc;
-  status["freeHeap"]          = device_info->free_heap;
-  status["wifiMode"]          = device_info->wifi_mode;
-  status["ipAddress"]         = device_info->ip_address;
-  status["macAddress"]        = device_info->mac_address;
-
-  serializeJson(doc, result, len);
-  LOG_WEB("[JSON] Free HEAP After Serialization: %d Memory Usage: %d\n", ESP.getFreeHeap(), doc.memoryUsage());
-#ifdef DEBUG_WEB_JSON
-  serializeJson(doc, Serial);
-  Serial.println();
-#endif
-
-}
-
-void WEBUIClass::lightJson(char *result, size_t len) {
-#ifdef DEBUG_WEB
-  uint32_t heap = system_get_free_heap_size();
-#endif
-
-  const size_t capacity = JSON_OBJECT_SIZE(5) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS) + JSON_ARRAY_SIZE(MAX_LED_CHANNELS);
-  DynamicJsonDocument doc(capacity + 96);
-  JsonObject root = doc.to<JsonObject>();
-  root["response"] = "getLight";
-
-  /* Get current brightness */
-  root["brightness"] = SCHEDULE.getBrightness();
-
-  /* Get current channel duty */
-  JsonArray channelDuty= root.createNestedArray("duty");
-  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-    channelDuty.add(SCHEDULE.getChannelDuty(i));
-  }
-
-  /* Get Real channel duty */
-  JsonArray channelRealDuty= root.createNestedArray("real_duty");
-  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-    channelRealDuty.add(SCHEDULE.getChannelRealDuty(i));
-  }
-
-  /* Get current channel state */
-  JsonArray channelState = root.createNestedArray("state");
-  for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-    uint8_t state = SCHEDULE.getChannelState(i);
-    channelState.add(state);
-  }
-
-  serializeJson(doc, result, len);
-  LOG_WEB("[JSON] Free HEAP Before %d / After Serialization: %d Memory Usage: %d\n", heap, system_get_free_heap_size(), doc.memoryUsage());
-#ifdef DEBUG_WEB_JSON
-  serializeJson(doc, Serial);
-  Serial.println();
-#endif
-
 }
 
 WEBUIClass WEBUI;

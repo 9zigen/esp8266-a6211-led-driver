@@ -92,13 +92,10 @@
                         <div class="field-body">
                           <div class="field">
                             <div class="control">
-                              <input
+                              <input-ip
                                 v-model="network.ip_address"
-                                v-mask="'###.###.###.###'"
-                                class="input"
-                                type="text"
-                                placeholder="192.168.001.002"
-                              >
+                                placeholder="192.168.1.200"
+                              />
                             </div>
                             <p class="help">
                               IP address
@@ -106,13 +103,10 @@
                           </div>
                           <div class="field">
                             <div class="control">
-                              <input
+                              <input-ip
                                 v-model="network.gateway"
-                                v-mask="'###.###.###.###'"
-                                class="input"
-                                type="text"
-                                placeholder="192.168.001.001"
-                              >
+                                placeholder="192.168.1.1"
+                              />
                             </div>
                             <p class="help">
                               Gateway
@@ -120,13 +114,10 @@
                           </div>
                           <div class="field">
                             <div class="control">
-                              <input
+                              <input-ip
                                 v-model="network.mask"
-                                v-mask="'###.###.###.###'"
-                                class="input"
-                                type="text"
-                                placeholder="255.255.255.000"
-                              >
+                                placeholder="255.255.255.0"
+                              />
                             </div>
                             <p class="help">
                               Mask
@@ -134,13 +125,10 @@
                           </div>
                           <div class="field">
                             <div class="control">
-                              <input
+                              <input-ip
                                 v-model="network.dns"
-                                v-mask="'###.###.###.###'"
-                                class="input"
-                                type="text"
-                                placeholder="192.168.001.001"
-                              >
+                                placeholder="192.168.1.1"
+                              />
                             </div>
                             <p class="help">
                               DNS
@@ -167,7 +155,7 @@
       ><plus-icon size="1.5x" />Add New</a>
       <a
         class="button is-primary"
-        @click="saveSettings"
+        @click="saveNetwork"
       ><check-icon size="1.5x" /> Apply</a>
     </div>
   </div>
@@ -175,9 +163,8 @@
 
 <script>
 
-import { store, mutations } from '../store'
+import { http } from '@/http'
 import { eventBus } from '@/eventBus'
-import { api } from '@/api'
 
 export default {
   name: 'Wifi',
@@ -185,39 +172,13 @@ export default {
     return {
       networks: [],
       nextNetworkId: 0,
-      capacity: 0
+      capacity: 2
     }
   },
   mounted () {
-    eventBus.$on('networksLoaded', (id) => {
-      this.loadSettings()
-    })
+    this.loadNetwork()
   },
   methods: {
-    loadSettings () {
-      if (store.settings.networks) {
-        this.networks = store.settings.networks.items.map((value, index) => ({
-          id: index,
-          ssid: value.ssid,
-          password: value.password,
-          ip_address: value.ip_address,
-          mask: value.mask,
-          gateway: value.gateway,
-          dns: value.dns,
-          dhcp: value.dhcp
-        }))
-        this.nextNetworkId = this.networks.length
-
-        /* set max available network config, this is Hardware specific */
-        if (store.settings.networks.capacity > 0) { this.capacity = store.settings.networks.capacity }
-      } else {
-        console.log('Error loading NETWORKS')
-      }
-    },
-    saveSettings () {
-      mutations.setSettings({ networks: { items: this.networks } })
-      api.setNetworks()
-    },
     addNetwork () {
       if (this.networks.length < this.capacity) {
         this.networks.push({
@@ -241,6 +202,19 @@ export default {
       if (this.nextNetworkId > 0) {
         this.nextNetworkId--
       }
+    },
+    async saveNetwork () {
+      let networks = await http.post('/config/networks', { networks: this.networks })
+      if (networks.data.save) {
+        eventBus.$emit('message', 'Saved', 'success')
+      } else {
+        eventBus.$emit('message', 'NOT Saved', 'danger')
+      }
+    },
+    async loadNetwork () {
+      let response = await http.get('/config/networks')
+      this.networks = response.data.networks
+      this.nextNetworkId = this.networks.length
     }
   }
 }

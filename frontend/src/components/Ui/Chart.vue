@@ -192,7 +192,9 @@ export default {
         start: this.startDate,
         end: this.endDate,
         countLabel: this.countLabel
-      }
+      },
+
+      firstRun: true
     }
   },
 
@@ -206,8 +208,12 @@ export default {
     dataSets: {
       handler (val) {
         this.$set(this.data, 'datasets', val)
-        /* update fix */
-        this.startChart()
+        if (this.firstRun) {
+          this.firstRun = false
+          this.startChart()
+        } else {
+          this.update(this.data)
+        }
       },
       deep: true
     }

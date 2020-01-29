@@ -15,9 +15,8 @@
 
 <script>
 
-import { store } from '@/store'
 import { eventBus } from '@/eventBus'
-import { api } from '@/api'
+import { http } from '../../http'
 
 export default {
   name: 'ScheduleChart',
@@ -34,40 +33,46 @@ export default {
     }
   },
   mounted () {
-    eventBus.$once('scheduleLoaded', () => {
-      this.loadSchedule()
-    })
-    api.getSchedule()
+    this.requestData()
   },
-
   methods: {
+    async requestData () {
+      eventBus.$emit('loading', true)
+      try {
+        let responseLeds = await http.get('/config/leds')
+        this.leds = responseLeds.data.leds
+        let responseSchedule = await http.get('/config/schedule')
+        this.schedule = responseSchedule.data.schedule
+        this.drawSchedule()
+      } catch (e) {
+        eventBus.$emit('message', e, 'danger')
+      }
+      eventBus.$emit('loading', false)
+    },
     timeToString (hour, minute) {
       const _hour = hour < 10 ? `0${hour}` : hour
       const _minute = minute < 10 ? `0${minute}` : minute
       return `${_hour}:${_minute}`
     },
-    loadSchedule () {
+    async drawSchedule () {
       /* set colors */
-      if (store.settings.leds) {
-        this.colors = store.settings.leds.map((value, index, array) => value.color)
+      if (this.leds) {
+        this.colors = this.leds.map((value, index, array) => value.color)
       }
 
       /* set data */
-      if (store.settings.schedule.items.length > 0) {
-        console.log('loadSchedule')
-
+      if (this.schedule.length > 0) {
         /* Sort array by TIME */
-        store.settings.schedule.items.sort((a, b) => (a.time_hour * 60 + a.time_minute) - (b.time_hour * 60 + b.time_minute))
+        this.schedule.sort((a, b) => (a.time_hour * 60 + a.time_minute) - (b.time_hour * 60 + b.time_minute))
 
-        const _labels = store.settings.schedule.items.map(v => this.timeToString(v.time_hour, v.time_minute))
-        const _series = store.settings.leds.map((value, index) => ({
-          name: `LED CH ${index}`,
-          values: store.settings.schedule.items.map((v) => v.duty[index] * v.led_brightness / 255)
+        const _labels = this.schedule.map(v => this.timeToString(v.time_hour, v.time_minute))
+        const _series = this.leds.map((value, index) => ({
+          name: `LED CH ${index + 1}`,
+          values: this.schedule.map((v) => v.duty[index] * v.brightness / 100)
         }))
 
         this.labels = _labels
         this.series = _series
-        this.schedule = [...store.settings.schedule.items]
       }
     }
   }

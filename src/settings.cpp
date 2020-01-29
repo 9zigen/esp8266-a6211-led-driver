@@ -94,16 +94,16 @@ void Settings::init() {
     strlcpy(service.hostname, hostname_buf, 20);
 
     /* NTP */
-    strcpy(service.ntp_server_name, "es.pool.ntp.org");
-    service.utc_offset_minutes = 60;
+    strcpy(service.ntp_server, "es.pool.ntp.org");
+    service.utc_offset = 60;
     service.ntp_dst = true;
-    service.enable_ntp_service = true;
+    service.enable_ntp = true;
 
     /*MQTT */
     strcpy(service.mqtt_user, empty_str);
     strcpy(service.mqtt_password, empty_str);
-    service.mqtt_port = 1833;
-    service.enable_mqtt_service = false;
+    service.mqtt_port = 1883;
+    service.enable_mqtt = false;
     service.mqtt_qos = 0;
 
     /* set default values */
@@ -119,10 +119,10 @@ void Settings::init() {
     if (led[i].magic_number != (40 + i)) {
       led[i].magic_number = (uint8_t)(40 + i);
 
-      strlcpy(led[i].color, "#DDEFFF", 8); /* default color #DDEFFF -> 'Cold White' in UI */
-      led[i].default_duty = 0;             /* 0 - 255 -> channel boot duty */
-      led[i].channel_power = 0;            /* 0 ->  0.0 in Watts x 10 */
-      led[i].state = 0;                    /* 0 ->  OFF | 1 -> ON */
+      strlcpy(led[i].color, "#DDEFFF", 8);  /* default color #DDEFFF -> 'Cold White' in UI */
+      led[i].last_duty = 0;                 /* 0 - 100 -> channel boot duty */
+      led[i].power = 0;                     /* 0 ->  0.0 in Watts x 10 */
+      led[i].state = 1;                     /* 0 ->  OFF | 1 -> ON */
 
       /* set default values */
       eepromRotate.put(LED_OFFSET, led);
@@ -139,14 +139,17 @@ void Settings::init() {
     if (schedule[i].magic_number != (50 + i)) {
       schedule[i].magic_number = (uint8_t)(50 + i);
 
-      schedule[i].time_hour       = 0;
-      schedule[i].time_minute     = 0;
-      schedule[i].led_duty[0]     = 0; /* CH1 Default */
-      schedule[i].led_duty[1]     = 0; /* CH2 Default */
-      schedule[i].led_duty[2]     = 0; /* CH3 Default */
-      schedule[i].led_brightness  = 0; /* All Channels brightness */
-      schedule[i].enabled         = false;
-      schedule[i].active          = false;
+      schedule[i].time_hour     = 0;
+      schedule[i].time_minute   = 0;
+      schedule[i].channel[0]    = 0; /* CH1 Default */
+      schedule[i].channel[1]    = 0; /* CH2 Default */
+      schedule[i].channel[2]    = 0; /* CH3 Default */
+#if MAX_LED_CHANNELS == 5
+      schedule[i].channel[3]    = 0; /* CH4 Default */
+      schedule[i].channel[4]    = 0; /* CH5 Default */
+#endif
+      schedule[i].brightness    = 0; /* All Channels brightness */
+      schedule[i].active        = false;
 
       /* set default values */
       eepromRotate.put(SCHEDULE_OFFSET + sizeof(schedule_t) * i, schedule[i]);
@@ -202,7 +205,7 @@ bool Settings::save() {
 }
 
 String Settings::getNtpServerName() {
-  String name(service.ntp_server_name);
+  String name(service.ntp_server);
   if (name.length() > 0)
     return name;
   else
@@ -210,7 +213,7 @@ String Settings::getNtpServerName() {
 }
 
 int16_t Settings::getNtpOffset() {
-  return service.utc_offset_minutes;
+  return service.utc_offset;
 }
 
 led_t * Settings::getLED(uint8_t id) {
@@ -252,6 +255,9 @@ void Settings::erase() {
     eepromRotate.put(i, 0xFF);
   }
   eepromRotate.commit();
+
+  LOG_EEPROM("[EEPROM] Erased.\n");
+
 }
 
 Settings CONFIG;

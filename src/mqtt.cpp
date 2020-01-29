@@ -127,7 +127,13 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     /* switch command */
     uint8_t state = atoi(payload) & 0xff;
     LOG_MQTT("[MQTT] Set State Channel: %u to %u\n", channel, state);
-    SCHEDULE.setChannelState(channel, static_cast<channel_state_t>(state));
+    if (state) {
+      /* Set max Duty */
+      SCHEDULE.setChannelDuty(channel, MAX_DUTY);
+    } else {
+      /* Off channel */
+      SCHEDULE.setChannelDuty(channel, 0);
+    }
   }
 
 }
@@ -139,7 +145,7 @@ void onMqttPublish(uint16_t packetId) {
 
 void initMqtt() {
   services_t * services = CONFIG.getService();
-  if (services->enable_mqtt_service) {
+  if (services->enable_mqtt) {
     mqtt_enabled = true;
     mqtt_qos = services->mqtt_qos;
     mqttClient.onConnect(onMqttConnect);
@@ -150,13 +156,14 @@ void initMqtt() {
     mqttClient.onPublish(onMqttPublish);
 
     /* Load config from eeprom */
-    mqttClient.setServer(IPAddress(services->mqtt_ip_address), services->mqtt_port);
+    mqttClient.setServer(IPAddress(services->mqtt_server), services->mqtt_port);
     mqttClient.setClientId(services->hostname);
 
-    LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_ip_address).toString().c_str(), services->mqtt_port, services->hostname);
+    LOG_MQTT("[MQTT] Server: %s Port: %d Client ID: %s\n", IPAddress(services->mqtt_server).toString().c_str(), services->mqtt_port, services->hostname);
 
     if ( (strlen(services->mqtt_user) > 0) && (strlen(services->mqtt_password) > 0) ) {
       mqttClient.setCredentials(services->mqtt_user, services->mqtt_password);
+      LOG_MQTT("[MQTT] User:%s Password:%s\n", services->mqtt_user, services->mqtt_password);
     }
   }
 }
@@ -235,8 +242,13 @@ void publishChannelState() {
     snprintf(buf, 128, "%s/channel/%d/state", CONFIG.getHostname(), i);
 
     /* make message string */
-    snprintf(message_buf, 128, "%d", SCHEDULE.getChannelState(i));
-    LOG_MQTT("[MQTT] Publish Channel: %u state: %u.\n", i, SCHEDULE.getChannelState(i));
+    uint8_t state = 0;
+    if (SCHEDULE.getChannelDuty(i) > 0) {
+      state = 1;
+    }
+
+    snprintf(message_buf, 128, "%d", state);
+    LOG_MQTT("[MQTT] Publish Channel: %u state: %u.\n", i, state);
 
     /* publish led status to topic QoS 0, Retain */
     if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))

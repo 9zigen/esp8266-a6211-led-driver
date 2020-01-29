@@ -31,33 +31,87 @@
               </article>
             </div>
           </div>
-
           <!-- Right col -->
           <div class="tile is-vertical">
-            <!-- Software status -->
+            <!-- Light toggle -->
             <div class="tile is-parent">
-              <article class="tile is-child notification bg-notification is-primary">
+              <article class="tile is-child notification bg-notification is-warning">
                 <p class="title">
-                  Software
+                  Light Channel control
                 </p>
-                <p class="subtitle">
-                  Services info
-                </p>
-                <div class="columns">
-                  <div class="column has-text-left">
-                    <ul>
-                      <li>Time: {{ status.localTime }}</li>
-                      <li>Uptime: {{ status.upTime }}</li>
-                      <li>MQTT Server: {{ status.mqttService }}</li>
-                      <li>NTP: {{ status.ntpService }}</li>
-                    </ul>
+                <div class="columns is-vcentered">
+                  <div class="column is-12">
+                    <div
+                      v-for="(led, index) in status.channels"
+                      v-bind:key="index"
+                      class="field is-horizontal"
+                    >
+                      <div class="field-body">
+                        <div class="field">
+                          <div class="control">
+                            <slider
+                              v-model.number="status.channels[index]"
+                              min="0"
+                              max="100"
+                              v-bind:color="sliderColor(index)"
+                              @change="setDuty"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="field is-horizontal">
+                      <div class="field-body">
+                        <div class="field">
+                          <label>Brightness</label>
+                          <div class="control">
+                            <slider
+                              v-model.number="status.brightness"
+                              min="0"
+                              max="100"
+                              @change="setBrightness"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </article>
             </div>
+            <!-- Light Channel status -->
+            <div class="tile is-parent">
+              <article class="tile is-child notification bg-notification is-light">
+                <p class="title">
+                  Light Status
+                </p>
+                <p class="subtitle">
+                  Channels Power
+                </p>
+                <div class="columns is-mobile is-multiline">
+                  <div
+                    v-for="(led, index) in status.channels"
+                    v-bind:key="index"
+                    class="column is-narrow"
+                  >
+                    <div
+                      class="notification is-light is-medium"
+                      v-bind:style="{backgroundColor: sliderColor(index)}"
+                    >
+                      #{{ index + 1 }} <br> {{ ledPower(index) }}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile is-vertical">
             <!-- Hardware Status -->
             <div class="tile is-parent">
-              <article class="tile is-child notification bg-notification is-info">
+              <article class="tile is-child notification bg-notification is-primary">
                 <p class="title">
                   Hardware
                 </p>
@@ -73,6 +127,14 @@
                       <li>WIFI: {{ wifiCurrentMode }}</li>
                       <li>IP Address: {{ status.ipAddress }}</li>
                       <li>MAC: {{ status.macAddress }}</li>
+                    </ul>
+                  </div>
+                  <div class="column has-text-left">
+                    <ul>
+                      <li>Time: {{ status.localTime }}</li>
+                      <li>Uptime: {{ status.upTime }}</li>
+                      <li>MQTT Server: {{ status.mqttService }}</li>
+                      <li>NTP: {{ status.ntpService }}</li>
                     </ul>
                   </div>
                 </div>
@@ -104,91 +166,6 @@
             </div>
           </div>
         </div>
-
-        <div class="tile">
-          <div class="tile is-vertical">
-            <!-- Light Channel status -->
-            <div class="tile is-parent">
-              <article class="tile is-child notification bg-notification is-light">
-                <p class="title">
-                  Light Status
-                </p>
-                <div class="columns is-mobile is-multiline">
-                  <div class="column is-narrow is-hidden-mobile is-hidden-tablet-only">
-                    Channels Power:
-                  </div>
-                  <div
-                    v-for="(led, index) in light.duty"
-                    v-bind:key="index"
-                    class="column is-narrow"
-                  >
-                    <span
-                      class="tag is-light"
-                      v-bind:style="{backgroundColor: sliderColor(index)}"
-                    >{{ ledPower(index) }}</span>
-                  </div>
-                </div>
-              </article>
-            </div>
-
-            <!-- Light toggle -->
-            <div class="tile is-parent">
-              <article class="tile is-child notification bg-notification is-warning">
-                <p class="title">
-                  Light Channel control
-                </p>
-                <div class="columns is-vcentered">
-                  <div class="column is-12">
-                    <div
-                      v-for="(led, index) in light.duty"
-                      v-bind:key="index"
-                      class="field is-horizontal"
-                    >
-                      <div class="field-body">
-                        <div class="field">
-                          <div class="control">
-                            <slider
-                              v-model.number="light.duty[index]"
-                              min="0"
-                              max="255"
-                              v-bind:color="sliderColor(index)"
-                              @change="updateDuty"
-                            />
-                          </div>
-                        </div>
-                        <div class="field is-narrow">
-                          <div class="control">
-                            <toggle-switch
-                              v-model="light.state[index]"
-                              round
-                              @change="updateState"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="field is-horizontal">
-                      <div class="field-body">
-                        <div class="field">
-                          <label>Brightness</label>
-                          <div class="control">
-                            <slider
-                              v-model.number="light.brightness"
-                              min="0"
-                              max="255"
-                              @change="updateBrightness"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -196,9 +173,8 @@
 
 <script>
 
-import { store } from '../store'
 import { eventBus } from '../eventBus'
-import { api } from '../api'
+import { http } from '../http'
 
 export default {
   name: 'Home',
@@ -210,15 +186,12 @@ export default {
         chipId: 0,
         freeHeap: 0,
         vcc: 0,
-        wifiMode: 0,
+        wifiMode: '',
         ipAddress: '',
         macAddress: '00:00:00:00:00:00',
         mqttService: '',
-        ntpService: ''
-      },
-      light: {
-        duty: [],
-        state: [],
+        ntpService: '',
+        channels: [0, 0, 0, 0, 0],
         brightness: 0
       },
       colors: [],
@@ -236,38 +209,38 @@ export default {
     }
   },
   mounted () {
-    eventBus.$once('statusLoaded', () => {
-      this.getStatus()
-      api.getLight()
-    })
-
-    eventBus.$on('lightReady', (newLight) => {
-      /* set colors and channels power */
-      if (store.settings.leds) {
-        this.colors = store.settings.leds.map((value, index, array) => value.color)
-        this.power = store.settings.leds.map((value, index, array) => value.channel_power)
-      }
-      /* load light status */
-      Object.assign(this.light, newLight)
-    })
-  },
-  destroyed () {
-    eventBus.$off('lightReady')
-    // clearInterval(this.refreshInterval)
+    this.requestData()
   },
   methods: {
-    channelControlButtonText (value) {
-      return this.light.state === 1 ? 'ON' : 'OFF'
+    async requestData () {
+      eventBus.$emit('loading', true)
+      try {
+        /* Device status */
+        let status = await http.get('/status')
+        this.status = status.data
+
+        /* Leds config */
+        let responseLeds = await http.get('/config/leds')
+        this.colors = responseLeds.data.leds.map((value, index, array) => value.color)
+        this.power = responseLeds.data.leds.map((value, index, array) => value.power)
+      } catch (e) {
+        eventBus.$emit('message', e, 'danger')
+      }
+      eventBus.$emit('loading', false)
     },
     ledStatus (value) {
-      if (value) { return `${parseInt(value * 100 / 255)}%` } return `OFF ${parseInt(value * 100 / 255)}%`
+      if (value) { return `${parseInt(value)}%` } return `OFF ${parseInt(value)}%`
     },
     ledPower (index) {
       let string = ''
-      const duty = this.light.real_duty
+      const channels = this.status.channels
 
-      if (duty[index] && this.power[index]) {
-        const percent = duty[index] / 255
+      if (this.power[index] === 0) {
+        return 'POWER not SET '
+      }
+
+      if (channels[index]) {
+        const percent = channels[index] / 100
         const power = this.power[index]
 
         string += `${parseInt(percent * 100)}%`
@@ -276,53 +249,47 @@ export default {
       }
       return 'OFF '
     },
-    getStatus () {
-      if (store.status) {
-        this.status = store.status
+    async restoreDevice () {
+      try {
+        let response = await http.get('/factory')
+        if (response.data.success) { eventBus.$emit('message', 'Factory Restoring...', 'success') }
+      } catch (e) {
+        eventBus.$emit('message', e, 'danger')
       }
     },
-    restoreDevice () {
-      api.erase()
-    },
-    rebootDevice () {
-      api.reboot()
-    },
-    updateDuty () {
-      if (this.light.duty.length > 0) {
-        api.setDuty(this.light.duty)
-        this.reloadLight()
+    async rebootDevice () {
+      try {
+        let response = await http.get('/reboot')
+        if (response.data.success) { eventBus.$emit('message', 'Rebooting...', 'success') }
+      } catch (e) {
+        eventBus.$emit('message', e, 'danger')
       }
     },
-    updateState () {
-      if (this.light.state.length > 0) {
-        api.setState(this.light.state)
-        this.reloadLight()
+    async setDuty () {
+      if (this.status.channels.length > 0) {
+        try {
+          /* Set New Duty value */
+          let response = await http.post('/set/duty', { duty: this.status.channels })
+          this.$set(this.status, 'channels', response.data.duty)
+        } catch (e) {
+          eventBus.$emit('message', e, 'danger')
+        }
       }
     },
-    updateBrightness () {
-      api.setBrightness(this.light.brightness)
-      this.reloadLight()
+    async setBrightness () {
+      if (this.status.brightness !== undefined) {
+        try {
+          /* Set New Duty value */
+          let response = await http.post('/set/brightness', { brightness: this.status.brightness })
+          this.$set(this.status, 'brightness', response.data)
+        } catch (e) {
+          eventBus.$emit('message', e, 'danger')
+        }
+      }
     },
     sliderColor (index) {
       return this.colors[index]
-    },
-    reloadLight () {
-      setTimeout(() => {
-        api.getLight()
-      }, 1500)
     }
   }
 }
 </script>
-
-<style scoped>
-  .action {
-    margin: 8px !important;
-  }
-  /*@media screen and (max-width: 768px) {*/
-    /*.is-fixed-bottom-touch {*/
-      /*position: fixed;*/
-    /*}*/
-  /*}*/
-
-</style>

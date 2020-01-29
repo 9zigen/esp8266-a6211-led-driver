@@ -5,7 +5,6 @@ import Settings from './views/Settings'
 import About from './views/About'
 import Schedule from './views/Schedule'
 import Wifi from './views/Wifi'
-import { api } from '@/api'
 
 Vue.use(Router)
 
@@ -19,7 +18,6 @@ export default new Router({
       name: 'home',
       component: Home,
       beforeEnter: (to, from, next) => {
-        api.getStatus()
         next()
       }
     },
@@ -28,7 +26,6 @@ export default new Router({
       name: 'schedule',
       component: Schedule,
       beforeEnter: (to, from, next) => {
-        api.getSchedule()
         next()
       }
     },
@@ -37,7 +34,6 @@ export default new Router({
       name: 'wifi',
       component: Wifi,
       beforeEnter: (to, from, next) => {
-        api.getNetworks()
         next()
       }
     },
@@ -46,7 +42,6 @@ export default new Router({
       name: 'settings',
       component: Settings,
       beforeEnter: (to, from, next) => {
-        api.getSettings()
         next()
       }
     },

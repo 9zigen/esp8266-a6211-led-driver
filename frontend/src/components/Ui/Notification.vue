@@ -2,10 +2,14 @@
   <transition name="fade">
     <div
       v-show="showMessage"
-      class="toast notification"
-      v-bind:class="notifyStyle"
+      class="toast-wrapper"
     >
-      {{ message }}
+      <div
+        class="toast notification"
+        v-bind:class="notifyStyle"
+      >
+        {{ message }}
+      </div>
     </div>
   </transition>
 </template>
@@ -47,12 +51,19 @@ export default {
     transition: all ease-out .5s;
   }
   .toast {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    -webkit-box-shadow: #444444 4px 4px 4px;
-    box-shadow: #444444 0 1px 20px;
+    -webkit-box-shadow: #dedede 2px 2px 2px;
+    box-shadow: #dedede 2px 2px 2px;
     padding: 1em 3em;
+  }
+  .toast-wrapper {
+    width: 300px;
+    height: 300px;
+    margin: 0 auto;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    margin-left: -150px;
+    margin-top: -150px;
     z-index: 9999;
   }
 </style>

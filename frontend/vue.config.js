@@ -11,7 +11,7 @@ if (process.env.NODE_ENV === 'production') {
       config.optimization.delete('splitChunks')
     },
 
-    baseUrl: undefined,
+    // baseUrl: undefined,
     assetsDir: undefined,
     runtimeCompiler: undefined,
     productionSourceMap: false,

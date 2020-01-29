@@ -2,22 +2,99 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const app = express();
+const cors = require('cors');
 const bodyParser = require('body-parser');
 
 //initialize a simple http server
 const server = http.createServer(app);
 
 // create application/json parser
-var jsonParser = bodyParser.json()
+var jsonParser = bodyParser.json();
 
 var token;
 
+// Enable CORS on ExpressJS to avoid cross-origin errors when calling this server using AJAX
+// We are authorizing all domains to be able to manage information via AJAX (this is just for development)
+app.use(cors());
+app.options('*', cors()); // include before other routes
+
+// Body parser middleware to auto-parse request text to JSON
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+/* Home page */
 app.get('/', function (req, res) {
   res.send('Hello World');
 });
 
+/* On-lne Status */
+app.get('/status', function (req, res) {
+  res.send(JSON.stringify(status));
+});
+
+/* Control channels */
+app.post('/duty', function (req, res) {
+  duty = req.body.duty
+  res.send(JSON.stringify(duty));
+});
+
+app.post('/brightness', function (req, res) {
+  brightness = req.body.brightness
+  res.send(JSON.stringify(brightness));
+});
+
+/* Schedule ----> */
+app.get('/schedule', function (req, res) {
+  res.send(JSON.stringify(schedule));
+});
+
+app.post('/schedule', function (req, res) {
+  console.log(req.body);
+  schedule = req.body.schedule
+  res.send(JSON.stringify(schedule));
+});
+
+
+/* Settings ----> */
+app.get('/leds', function (req, res) {
+  res.send(JSON.stringify(leds));
+});
+
+app.post('/leds', function (req, res) {
+  console.log(req.body);
+  leds = req.body.leds
+  res.send(JSON.stringify(leds));
+});
+
+app.get('/networks', function (req, res) {
+  res.send(JSON.stringify(networks));
+});
+
+app.post('/networks', function (req, res) {
+  networks = req.body.networks
+  res.send(JSON.stringify(networks));
+});
+
+app.get('/services', function (req, res) {
+  res.send(JSON.stringify(services));
+});
+
+app.post('/services', function (req, res) {
+  services = req.body.services
+  res.send(JSON.stringify(services));
+});
+
+app.get('/time', function (req, res) {
+  res.send(JSON.stringify(time));
+});
+
+app.post('/time', function (req, res) {
+  time = req.body.time
+  res.send(JSON.stringify(time));
+});
+
 app.post('/auth', jsonParser, function(req, res) {
-  if (!req.body) return res.sendStatus(400)
+  if (!req.body) return res.sendStatus(400);
 
   if (req.body.login === "login" && req.body.password === "password") {
     token = Math.random();
@@ -30,67 +107,79 @@ app.post('/auth', jsonParser, function(req, res) {
   // console.log(req.text.pass);
 });
 
-// Enable CORS on ExpressJS to avoid cross-origin errors when calling this server using AJAX
-// We are authorizing all domains to be able to manage information via AJAX (this is just for development)
-
-app.use(function(req, res, next) {
-  // Instead of "*" you should enable only specific origins
-  res.header('Access-Control-Allow-Origin', '*');
-  // Supported HTTP verbs
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
-  // Other custom headers
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
-
-// Body parser middleware to auto-parse request text to JSON
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
 
 const wss = new WebSocket.Server({
-    server,
-    path: "/ws",
+  server,
+  path: "/ws",
 });
 
+let services = {
+  hostname: 'test',
+  ntp_server_name: '',
+  utc_offset_minutes: 0,
+  ntp_dst: true,
+  mqtt_ip_address: '',
+  mqtt_port: '',
+  mqtt_user: '',
+  mqtt_password: '',
+  mqtt_qos: 0,
+  enable_ntp_service: false,
+  enable_mqtt_service: false
+}
 
 let networks = [
-    {
-      id: 0,
-      ssid: "wifi 1",
-      password: "12345678",
-      dhcp: false,
-      ip: "192.168.1.4",
-      mask: "255.255.255.0",
-      gateway: "192.168.1.1",
-      dns: "192.168.1.1"
-    },
-    {
-      id: 1,
-      ssid: "wifi 2",
-      password: "111111111",
-      dhcp: true,
-      ip: "",
-      mask: "",
-      gateway: "",
-      dns: ""
-    }
-  ];
+  {
+    id: 0,
+    ssid: 'Best WiFi',
+    password: '',
+    ip_address: '192.168.1.100',
+    mask: '255.255.255.0',
+    gateway: '192.168.1.1',
+    dns: '192.168.1.1',
+    dhcp: false
+  },
+  {
+    id: 1,
+    ssid: 'Best WiFi 2',
+    password: '',
+    ip_address: '',
+    mask: '',
+    gateway: '',
+    dns: '',
+    dhcp: true
+  }
+];
 
 let leds = [
   {
     id: 0,
     color: '#DDEFFF',
-    default_duty: 0
+    power: 50,
+    state: 1
   },
   {
     id: 1,
     color: '#DDEFFF',
-    default_duty: 20
+    power: 30,
+    state: 1
   },
   {
     id: 2,
     color: '#DDEFFF',
-    default_duty: 0
+    power: 40,
+    state: 1
+  },
+  {
+    id: 3,
+    color: '#DDEFFF',
+    power: 40,
+    state: 1
+  },
+  {
+    id: 4,
+    color: '#DDEFFF',
+    power: 40,
+    state: 1
   }
 ];
 
@@ -98,49 +187,68 @@ let schedule = [
   {
     time_hour: 9,
     time_minute: 0,
-    enabled: true,
+    brightness: 50,
     duty: [
-      10, 20, 10
+      10, 20, 10, 20, 20
     ]
   },
   {
     time_hour: 12,
     time_minute: 0,
-    enabled: false,
+    brightness: 100,
     duty: [
-      40, 20, 10
+      40, 20, 10, 20, 20
     ]
   },
   {
     time_hour: 13,
     time_minute: 0,
-    enabled: true,
+    brightness: 120,
     duty: [
-      100, 100, 100
+      100, 100, 100, 20, 20
     ]
   },
   {
     time_hour: 19,
     time_minute: 0,
-    enabled: true,
+    brightness: 20,
     duty: [
-      0, 10, 0
+      0, 10, 0, 20, 20
     ]
   }
 
 ];
 
 let status = {
-  upTime: 360,
+  upTime: '1 day',
+  localTime: '12:22',
   chipId: 1827,
   freeHeap: 23567,
   vcc: 20,
   wifiMode: 'STA',
   ipAddress: '192.168.1.199',
   macAddress: '0A:EE:00:00:01:90',
-  dhcp: true
+  mqttService: '',
+  ntpService: '',
+  brightness: 90,
+  channels: [50, 100, 100, 20, 20]
+};
+
+let time = {
+  year: 20,
+  month: 10,
+  weekday: 1,
+  day: 10,
+  hour: 12,
+  minute: 1,
+  second: 1,
+  dst: 0,
+  utc: 1
 }
 
+let duty = [50, 100, 100, 20, 20];
+
+let brightness = 100;
 
 function getRandomArbitrary(min, max) {
   return Math.random() * (max - min) + min;

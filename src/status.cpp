@@ -4,6 +4,7 @@
 
 #include <user_interface.h>
 #include <IPAddress.h>
+#include <ESP8266WiFi.h>
 #include "Ticker.h"
 #include "status.h"
 #include "mqtt.h"
@@ -29,6 +30,8 @@ void statusLoop() {
     status.free_heap = system_get_free_heap_size();
     status.cpu_freq = system_get_cpu_freq();
     status.vcc = analogRead(A0);
+
+    /* WiFi Mode */
     status.wifi_mode = wifi_get_opmode();
 
     /* IP Address */

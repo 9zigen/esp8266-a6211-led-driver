@@ -32,7 +32,7 @@
             <div class="field">
               <div class="control has-text-centered">
                 <toggle-switch
-                  v-model="services.enable_ntp_service"
+                  v-model="services.enable_ntp"
                   round
                 />
               </div>
@@ -54,7 +54,7 @@
             <div class="field">
               <div class="control">
                 <input
-                  v-model="services.ntp_server_name"
+                  v-model="services.ntp_server"
                   class="input"
                   type="text"
                   placeholder="NTP Server Name"
@@ -67,7 +67,7 @@
             <div class="field">
               <div class="control">
                 <input
-                  v-model="services.utc_offset_minutes"
+                  v-model="services.utc_offset"
                   class="input"
                   type="text"
                   placeholder="UTC Offset"
@@ -91,7 +91,7 @@
             <div class="field">
               <div class="control has-text-centered">
                 <toggle-switch
-                  v-model="services.enable_mqtt_service"
+                  v-model="services.enable_mqtt"
                   round
                 />
               </div>
@@ -122,13 +122,10 @@
             </div>
             <div class="field">
               <div class="control">
-                <input
-                  v-model="services.mqtt_ip_address"
-                  v-mask="'###.###.###.###'"
-                  class="input"
-                  type="text"
+                <input-ip
+                  v-model="services.mqtt_server"
                   placeholder="MQTT IP Address"
-                >
+                />
               </div>
               <p class="help">
                 MQTT Server IP Address
@@ -199,7 +196,7 @@
         </span>
         <span
           class="button is-danger"
-          @click="loadSettings"
+          @click="loadServices"
         >
           <x-icon
             size="1.5x"
@@ -212,9 +209,8 @@
 </template>
 
 <script>
-import { store, mutations } from '@/store'
 import { eventBus } from '@/eventBus'
-import { api } from '@/api'
+import { http } from '@/http'
 
 export default {
   name: 'Services',
@@ -222,16 +218,16 @@ export default {
     return {
       services: {
         hostname: '',
-        ntp_server_name: '',
-        utc_offset_minutes: 0,
+        ntp_server: '',
+        utc_offset: 0,
         ntp_dst: true,
-        mqtt_ip_address: '',
+        mqtt_server: '',
         mqtt_port: '',
         mqtt_user: '',
         mqtt_password: '',
         mqtt_qos: 0,
-        enable_ntp_service: false,
-        enable_mqtt_service: false
+        enable_ntp: false,
+        enable_mqtt: false
       },
       mqttOptions: [
         { text: 'At most once (0)', value: '0' },
@@ -241,33 +237,21 @@ export default {
     }
   },
   mounted () {
-    eventBus.$on('servicesLoaded', () => {
-      this.loadServices()
-    })
     this.loadServices()
   },
-  destroyed () {
-    eventBus.$off('servicesLoaded')
-  },
   methods: {
-    loadServices () {
-      if (store.settings.services) {
-        this.services = store.settings.services
+    async saveServices () {
+      let services = await http.post('/config/services', { services: this.services })
+      if (services.data.save) {
+        eventBus.$emit('message', 'Saved', 'success')
       } else {
-        api.getSettings()
+        eventBus.$emit('message', 'NOT Saved', 'danger')
       }
     },
-    saveServices () {
-      mutations.setSettings({ services: this.services })
-      api.setServices()
-    },
-    loadSettings () {
-      api.getSettings()
+    async loadServices () {
+      let response = await http.get('/config/services')
+      this.services = response.data.services
     }
   }
 }
 </script>
-
-<style scoped>
-
-</style>

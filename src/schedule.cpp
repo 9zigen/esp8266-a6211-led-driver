@@ -62,9 +62,6 @@ void ScheduleClass::init() {
 #endif
   for (unsigned int i=0; i < MAX_LED_CHANNELS; i++) {
     pwm_duty_init[i] = 0;
-//    io_info[i][0] = getIOMux(ledPin[i]);
-//    io_info[i][1] = getIOFunc(ledPin[i]);
-//    io_info[i][2] = ledPin[i];
     pinMode(ledPin[i], OUTPUT);
   }
 
@@ -75,7 +72,7 @@ void ScheduleClass::init() {
 
   /* Read RTC MEM packet */
   led_state_rtc_mem_t rtc_mem;
-  system_rtc_mem_read(64, &rtc_mem, sizeof(rtc_mem));
+  system_rtc_mem_read(RTC_LED_ADDR, &rtc_mem, sizeof(rtc_mem));
 
   /* Check Magic if OK, apply RTC backup */
   if (rtc_mem.magic_number == RTC_LED_MAGIC) {
@@ -86,9 +83,8 @@ void ScheduleClass::init() {
 
     for (unsigned int i=0; i < MAX_LED_CHANNELS; i++) {
       /* Restore channel state */
-      _leds[i].target_state = rtc_mem.target_state[i];
-      _leds[i].target_duty = rtc_mem.target_duty[i];
-      LOG_SCHEDULE("[SCHEDULE] GET RTC MEM LED %d State: %d Brightness: %d Target: %d\n", i, _leds[i].target_state, brightness, _leds[i].target_duty);
+      channel[i].target_duty = rtc_mem.target_duty[i];
+      LOG_SCHEDULE("[SCHEDULE] GET RTC MEM LED %d Brightness: %d Target: %d\n", i, brightness, channel[i].target_duty);
     }
   } else {
     /* Apply initial led channel output state */
@@ -96,12 +92,11 @@ void ScheduleClass::init() {
 
     /* Restore brightness
      * ToDo: store brightness in flash */
-    brightness = 255;
+    brightness = MAX_BRIGHTNESS;
 
     for (uint8_t i=0; i < MAX_LED_CHANNELS; i++) {
       led_t * led = CONFIG.getLED(i);
-      _leds[i].target_state   = static_cast<channel_state_t>(led->state);
-      _leds[i].target_duty    = led->default_duty;
+      channel[i].target_duty    = led->last_duty;
     }
   }
 
@@ -140,7 +135,7 @@ void ScheduleClass::loop() {
     for (uint8_t j = 0; j < MAX_SCHEDULE; ++j) {
       schedule_t * _schedule = CONFIG.getSchedule(j);
 
-      if (_schedule->active && _schedule->enabled)
+      if (_schedule->active)
       {
         /* once, every min check */
         if ((second(local_time) == 0)) {
@@ -155,11 +150,11 @@ void ScheduleClass::loop() {
           /* Set target duty from schedule */
           if (left == 0) {
             for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
-              brightness = _schedule->led_brightness;
-              _leds[i].target_duty = _schedule->led_duty[i];
+              brightness = _schedule->brightness;
+              channel[i].target_duty = _schedule->channel[i];
 
               LOG_SCHEDULE("[SCHEDULE] LED %d current: %d target: %d real: %d brightness: %d left: %d\n",
-                  i, _leds[i].current_duty, _leds[i].target_duty, _leds[i].real_duty, _schedule->led_brightness, left);
+                           i, channel[i].current_duty, channel[i].target_duty, channel[i].real_duty, _schedule->brightness, left);
 
             }
           }
@@ -178,20 +173,12 @@ void ScheduleClass::updateChannels() {
   for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
 
     /* Calc Real Duty */
-    uint8_t real_duty = _leds[i].current_duty * brightness / MAX_BRIGHTNESS;
+    uint8_t real_duty = channel[i].current_duty * brightness / MAX_BRIGHTNESS;
 
-    if (_leds[i].current_duty != _leds[i].target_duty || _leds[i].real_duty != real_duty) {
+    if (channel[i].current_duty != channel[i].target_duty || channel[i].real_duty != real_duty) {
 
       /* Setup transition */
-      _leds[i].steps_left = 50;
-      transition = true;
-    }
-
-    /* Channel state changed */
-    if (_leds[i].current_state != _leds[i].target_state) {
-      LOG_SCHEDULE("[SCHEDULE] LED %u State: %u -> %u\n", i, _leds[i].current_state, _leds[i].target_state);
-      /* Setup transition */
-      _leds[i].steps_left = 1;
+      channel[i].steps_left = 50;
       transition = true;
     }
   }
@@ -212,16 +199,15 @@ void ScheduleClass::saveChannelState() {
 
   for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
     /* Save target duty and channel state */
-    rtc_mem.target_duty[i] = _leds[i].target_duty;
-    rtc_mem.target_state[i] = _leds[i].target_state;
+    rtc_mem.target_duty[i] = channel[i].target_duty;
 
     /* Duty or Brightness changed */
-    LOG_SCHEDULE("[SCHEDULE] RTC MEM SET LED %u State: %u Brightness: %u Target: %u\n", i, rtc_mem.target_state[i], rtc_mem.led_brightness, rtc_mem.target_duty[i]);
+    LOG_SCHEDULE("[SCHEDULE] RTC MEM SET LED %u Brightness: %u Target: %u\n", i, rtc_mem.led_brightness, rtc_mem.target_duty[i]);
 
   }
 
   /* Save channels to RTC mem */
-  system_rtc_mem_write(64, &rtc_mem, sizeof(rtc_mem));
+  system_rtc_mem_write(RTC_LED_ADDR, &rtc_mem, sizeof(rtc_mem));
 }
 
 /* LED channels update status every second, the transition should be faster than this period */
@@ -230,39 +216,30 @@ void ScheduleClass::transition() {
   uint32_t steps_left = 0;
   for (uint8_t i = 0; i < MAX_LED_CHANNELS; ++i) {
 
-    if (_leds[i].steps_left > 0) {
-      _leds[i].steps_left--;
+    if (channel[i].steps_left > 0) {
+      channel[i].steps_left--;
 
-      /* Channel State changed */
-      if (_leds[i].current_state != _leds[i].target_state) {
-        _leds[i].current_state = _leds[i].target_state;
-      }
-
-      if (_leds[i].steps_left == 0) {
-        _leds[i].current_duty = _leds[i].target_duty;
+      if (channel[i].steps_left == 0) {
+        channel[i].current_duty = channel[i].target_duty;
       } else {
-        double difference = (0.0f + _leds[i].target_duty - _leds[i].current_duty) / (_leds[i].steps_left + 1);
-        _leds[i].current_duty = (uint32_t) fabs(0.0f + _leds[i].current_duty + difference);
+        double difference = (0.0f + channel[i].target_duty - channel[i].current_duty) / (channel[i].steps_left + 1);
+        channel[i].current_duty = (uint32_t) fabs(0.0f + channel[i].current_duty + difference);
       }
 
       /* Calc Real Duty */
-      uint8_t real_duty = _leds[i].current_duty * brightness / MAX_BRIGHTNESS;
+      uint8_t real_duty = channel[i].current_duty * brightness / MAX_BRIGHTNESS;
 
       /* Brightness changed */
-      if (_leds[i].real_duty != real_duty) {
-        double difference = (0.0f + real_duty - _leds[i].real_duty) / (_leds[i].steps_left + 1);
-        _leds[i].real_duty = (uint32_t) fabs(0.0f + _leds[i].real_duty + difference);
+      if (channel[i].real_duty != real_duty) {
+        double difference = (0.0f + real_duty - channel[i].real_duty) / (channel[i].steps_left + 1);
+        channel[i].real_duty = (uint32_t) fabs(0.0f + channel[i].real_duty + difference);
       }
 
-      /* Apply Only to Enabled channels, Set 0 to Disabled channels */
-      if (_leds[i].current_state == CHANNEL_ENABLED) {
-        pwm_set_duty(toPWM(_leds[i].real_duty), i);
-      } else {
-        pwm_set_duty(0, i);
-      }
+      /* Apply New Duty */
+      pwm_set_duty(toPWM(channel[i].real_duty), i);
 
       /* count steps left */
-      steps_left += _leds[i].steps_left;
+      steps_left += channel[i].steps_left;
     }
   }
 
@@ -273,10 +250,10 @@ void ScheduleClass::transition() {
 
     /* Publish channel duty */
     publishChannelDuty();
-    /* Publish channel state */
-    publishChannelState();
+
     /* Publish brightness */
     publishBrightness();
+
     /* Save channel state to RTC Memory */
     saveChannelState();
   }
@@ -285,17 +262,7 @@ void ScheduleClass::transition() {
   pwm_start();
 }
 
-/* Get channel state */
-channel_state_t ScheduleClass::getChannelState(uint8_t channel) {
-  return _leds[channel].current_state;
-}
-
-/* Switch ON/OFF channel */
-void ScheduleClass::setChannelState(uint8_t channel, channel_state_t state) {
-  _leds[channel].target_state = state;
-}
-
-/* Return 0 -> 255 Brightness Value */
+/* Return 0 -> 100 Brightness Value */
 uint8_t ScheduleClass::getBrightness() {
   return brightness;
 }
@@ -309,24 +276,28 @@ void ScheduleClass::setBrightness(uint8_t newBrightness) {
   }
 }
 
-/* Return 0 -> 255 Duty Value */
-uint8_t ScheduleClass::getChannelDuty(uint8_t channel) {
-  return _leds[channel].current_duty;
+/* Return 0 -> 100 Duty Value */
+uint8_t ScheduleClass::getChannelDuty(uint8_t id) {
+  return channel[id].current_duty;
+}
+
+uint8_t ScheduleClass::getTargetChannelDuty(uint8_t id) {
+  return channel[id].target_duty;
 }
 
 /* Set New Channel Duty */
-void ScheduleClass::setChannelDuty(uint8_t channel, uint8_t duty) {
-  _leds[channel].target_duty  = duty;
+void ScheduleClass::setChannelDuty(uint8_t id, uint8_t duty) {
+  channel[id].target_duty  = duty;
 }
 
-/* Return 0 -> 255 Duty Value */
-uint8_t ScheduleClass::getChannelRealDuty(uint8_t channel) {
-  return _leds[channel].real_duty;
+/* Return 0 -> MAX_DUTY Duty Value */
+uint8_t ScheduleClass::getChannelRealDuty(uint8_t id) {
+  return channel[id].real_duty;
 }
 
-/* Convert from 0 - 255 to 0 - 5000 or 2500 PWM Duty */
+/* Convert from 0 - MAX_DUTY to 0 - 5000 or 2500 PWM Duty */
 uint32_t ScheduleClass::toPWM(uint8_t value) {
-  return value * LIGHT_MAX_PWM / 255;
+  return value * LIGHT_MAX_PWM / MAX_DUTY;
 }
 
 ScheduleClass SCHEDULE;

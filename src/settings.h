@@ -65,16 +65,16 @@ typedef struct {
 typedef struct {
   uint8_t magic_number;
   char hostname[20];            // Device Name
-  char ntp_server_name[20];     // Wifi SSID Name
-  int16_t utc_offset_minutes;   // UTC offset in minutes
+  char ntp_server[20];          // Wifi SSID Name
+  int16_t utc_offset;           // UTC offset in minutes
   bool ntp_dst;                 // Daylight save
-  uint8_t mqtt_ip_address[4];   // IP v4 Address Array
+  uint8_t mqtt_server[4];       // IP v4 Address Array
   uint16_t mqtt_port;           // MQTT Server port 1883 default
   char mqtt_user[16];           // 16 Char MAX
   char mqtt_password[16];       // 16 Char MAX
   uint8_t mqtt_qos;
-  bool enable_ntp_service;      // Enable NTP Service
-  bool enable_mqtt_service;     // Enable MQTT Service
+  bool enable_ntp;              // Enable NTP Service
+  bool enable_mqtt;             // Enable MQTT Service
 } services_t;
 
 /* Led -----------------------
@@ -100,8 +100,8 @@ typedef struct {
 typedef struct {
   uint8_t magic_number;
   char color[8];                // RGB CSS Hex value FFFFFF -> white
-  uint8_t default_duty;         // On Boot safe led duty in percentage (0-100%)
-  uint16_t channel_power;       // Real Channel Power in Watts x 10 (0-65535) 100 = 10.0 in Web UI
+  uint8_t last_duty;            // On Boot led duty in percentage (0-100%)
+  uint16_t power;               // Real Channel Power in Watts x 10 (0-65535) 100 = 10.0 in Web UI
   uint8_t state;                // Enable/Disable channel
 } led_t;
 
@@ -115,9 +115,8 @@ typedef struct {
   uint8_t  magic_number;
   uint8_t  time_hour;                   // Schedule fire hour
   uint8_t  time_minute;                 // Schedule fire minutes
-  uint8_t  led_duty[MAX_LED_CHANNELS];  // Duty in percentage (0-100%)
-  uint8_t  led_brightness;              // All channels brightness in percentage (0-100%)
-  bool     enabled;                     // Enable/Disable this period
+  uint8_t  channel[MAX_LED_CHANNELS];   // Channel Duty in percentage (0-100%)
+  uint8_t  brightness;                  // All channels brightness in percentage (0-100%)
   bool     active;                      // Need send by WS to GUI
 } schedule_t;
 
