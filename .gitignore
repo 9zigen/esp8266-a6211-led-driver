@@ -34,3 +34,9 @@ yarn-error.log*
 *.eslintrc.js
 /data/js/app.js
 /data/js/app-legacy.js
+/cmake-build-all/
+/cmake-build-8ch-esp12e-stm32/
+/cmake-build-3ch-esp07/
+/cmake-build-3ch-esp07-ota/
+/cmake-build-5ch-esp12e/
+/cmake-build-5ch-esp12e-ota/
