@@ -44,7 +44,6 @@ export default {
     }
   },
   mounted () {
-    console.log(`Started ${this.$appName}`)
     eventBus.$on('message', (text, type) => {
       this.showMessage(text, type)
     })

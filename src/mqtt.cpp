@@ -21,7 +21,7 @@ bool isConnected = false;
 uint8_t mqtt_qos = 0;
 
 void onMqttConnect(bool sessionPresent) {
-  Serial.printf("[MQTT] Connected to server. \n");
+  LOG_MQTT("[MQTT] Connected to server. \n");
   isConnected = true;
 
   char buf[128];
@@ -36,7 +36,7 @@ void onMqttConnect(bool sessionPresent) {
 
     /* subscribe to topic QoS */
     if (!mqttClient.subscribe(buf, mqtt_qos))
-      Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
+        LOG_MQTT("[MQTT] ERROR Subscribe to topic: %s\n", buf);
   }
 
   /* Subscribe to Switch topic
@@ -49,7 +49,7 @@ void onMqttConnect(bool sessionPresent) {
 
     /* subscribe to topic QoS */
     if (!mqttClient.subscribe(buf, mqtt_qos))
-      Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
+        LOG_MQTT("[MQTT] ERROR Subscribe to topic: %s\n", buf);
   }
 
   /* Subscribe to Brightness topic
@@ -62,12 +62,17 @@ void onMqttConnect(bool sessionPresent) {
 
   /* subscribe to topic QoS */
   if (!mqttClient.subscribe(buf, mqtt_qos))
-    Serial.printf("[MQTT] ERROR Subscribe to topic: %s\n", buf);
+      LOG_MQTT("[MQTT] ERROR Subscribe to topic: %s\n", buf);
+
+  /* publish current state */
+  publishBrightness();
+  publishChannelDuty();
+  publishChannelState();
 
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.printf("[MQTT] Disconnected from server. Reason: %d\n", (int)reason);
+  LOG_MQTT("[MQTT] Disconnected from server. Reason: %d\n", (int)reason);
   isConnected = false;
   mqttReconnectTimer.once(2, connectToMqtt);
 }
@@ -135,7 +140,6 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
       SCHEDULE.setChannelDuty(channel, 0);
     }
   }
-
 }
 
 void onMqttPublish(uint16_t packetId) {

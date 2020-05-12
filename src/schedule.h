@@ -18,8 +18,8 @@
 #define LOG_SCHEDULE(...)
 #endif
 
-#define MAX_BRIGHTNESS 100
-#define MAX_DUTY       100
+#define MAX_BRIGHTNESS 255
+#define MAX_DUTY       255
 #define RTC_LED_MAGIC 0xAECE00EF
 #define RTC_LED_ADDR  65
 

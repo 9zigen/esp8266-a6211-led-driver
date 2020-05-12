@@ -18,17 +18,7 @@
 AsyncWebServer server(80);
 
 void setup() {
-  /* 160Mhz */
-  /* ToDo test 160Mhz */
-
   Serial.begin(115200);
-
-  /* ToDo: Get SYS time */
-//  uint32_t sys_time_us = system_get_time();
-//  uint32_t rtc_cycles = system_get_rtc_time();
-//  uint32_t cal = system_rtc_clock_cali_proc();
-//  uint32_t rtc_time_us = rtc_cycles * (cal*1000) > 12 / 1000;
-//  Serial.printf("SYS Time: %d us RTC Time: %d us\r", sys_time_us, rtc_time_us);
 
   /* Load all CONFIG from eeprom */
   CONFIG.init();

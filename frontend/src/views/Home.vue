@@ -52,7 +52,7 @@
                             <slider
                               v-model.number="status.channels[index]"
                               min="0"
-                              max="100"
+                              max="255"
                               v-bind:color="sliderColor(index)"
                               @change="setDuty"
                             />
@@ -68,7 +68,7 @@
                             <slider
                               v-model.number="status.brightness"
                               min="0"
-                              max="100"
+                              max="255"
                               @change="setBrightness"
                             />
                           </div>
@@ -240,7 +240,7 @@ export default {
       }
 
       if (channels[index]) {
-        const percent = channels[index] / 100
+        const percent = channels[index] / 255
         const power = this.power[index]
 
         string += `${parseInt(percent * 100)}%`

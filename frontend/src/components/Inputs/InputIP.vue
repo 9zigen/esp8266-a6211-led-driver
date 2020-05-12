@@ -89,7 +89,6 @@ export default {
         segments.push(segment)
       })
       if (segments.length !== 4) {
-        console.error('Not valid, so clearing ip', segments)
         this.clearAll()
       } else { this.ipCopy = segments }
     },
@@ -119,7 +118,7 @@ export default {
       padding: 0 5px;
     }
     .input {
-      width: 60px;
+      width: 65px;
     }
   }
 </style>

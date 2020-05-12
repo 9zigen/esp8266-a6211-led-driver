@@ -254,6 +254,9 @@ void ScheduleClass::transition() {
     /* Publish brightness */
     publishBrightness();
 
+    /* Publish channel state */
+    publishChannelState();
+
     /* Save channel state to RTC Memory */
     saveChannelState();
   }
@@ -288,11 +291,6 @@ uint8_t ScheduleClass::getTargetChannelDuty(uint8_t id) {
 /* Set New Channel Duty */
 void ScheduleClass::setChannelDuty(uint8_t id, uint8_t duty) {
   channel[id].target_duty  = duty;
-}
-
-/* Return 0 -> MAX_DUTY Duty Value */
-uint8_t ScheduleClass::getChannelRealDuty(uint8_t id) {
-  return channel[id].real_duty;
 }
 
 /* Convert from 0 - MAX_DUTY to 0 - 5000 or 2500 PWM Duty */
