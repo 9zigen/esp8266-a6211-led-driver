@@ -7,7 +7,7 @@
 #include <Hash.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include "schedule.h"
+#include "app_schedule.h"
 #include "settings.h"
 #include "webui.h"
 #include "led.h"
@@ -15,7 +15,9 @@
 #include "mqtt.h"
 #include "status.h"
 
+#ifndef OTA_ONLY
 AsyncWebServer server(80);
+#endif
 
 void setup() {
   Serial.begin(115200);
@@ -60,14 +62,12 @@ void setup() {
   });
   ArduinoOTA.begin();
 
-  /* MDNS Setup */
-  MDNS.addService("http","tcp",80);
-
-  /* Scheduler setup */
-  SCHEDULE.init();
-
   /* Led setup */
   LED.init();
+
+#ifndef OTA_ONLY
+  /* Scheduler setup */
+  SCHEDULE.init();
 
   /* MQTT setup */
   initMqtt();
@@ -75,18 +75,21 @@ void setup() {
   /* Initiate WebUi and attach your Async webserver instance */
   WEBUI.init(server);
   server.begin();
+#endif
 }
 
 void loop() {
   /* OTA Loop */
   ArduinoOTA.handle();
 
-  /* Schedule loop */
-  SCHEDULE.loop();
-
   /* check connection loop */
   NETWORK.loop();
 
+#ifndef OTA_ONLY
+  /* Schedule loop */
+  SCHEDULE.loop();
+
   /* Device status */
   statusLoop();
+#endif
 }

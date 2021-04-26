@@ -195,7 +195,7 @@ void Settings::setSettings() {
   LOG_EEPROM("[EEPROM] Save timer started.\n");
 
   /* Delay to avoid memory wear */
-  save_timer.once(10, std::bind(&Settings::save, this));
+  save_timer.once(1, std::bind(&Settings::save, this));
 
 }
 

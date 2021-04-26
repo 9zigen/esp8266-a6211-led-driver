@@ -2,6 +2,8 @@
 ** Created by Aleksey Volkov on 2019-05-16.
 ***/
 
+#ifndef OTA_ONLY
+
 #include "Arduino.h"
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
@@ -9,7 +11,7 @@
 #include <AsyncMqttClient.h>
 #include <NtpClientLib.h>
 #include "settings.h"
-#include "schedule.h"
+#include "app_schedule.h"
 #include "mqtt.h"
 #include "status.h"
 #include "Network.h"
@@ -302,3 +304,5 @@ void publishDeviceStatusToMqtt() {
   if (!mqttClient.publish(buf, mqtt_qos, true, message_buf, strlen(message_buf)))
     LOG_MQTT("[MQTT] ERROR Publish to topic: %s\n", buf);
 }
+
+#endif

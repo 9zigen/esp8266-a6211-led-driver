@@ -2,8 +2,8 @@
 ** Created by Aleksey Volkov on 2019-04-11.
 ***/
 
-#ifndef HV_CC_LED_DRIVER_SCHEDULE_H
-#define HV_CC_LED_DRIVER_SCHEDULE_H
+#ifndef HV_CC_LED_DRIVER_APP_SCHEDULE_H
+#define HV_CC_LED_DRIVER_APP_SCHEDULE_H
 
 #include "settings.h"
 #include "Ticker.h"
@@ -66,4 +66,4 @@ private:
 
 extern ScheduleClass SCHEDULE;
 
-#endif //HV_CC_LED_DRIVER_SCHEDULE_H
+#endif //HV_CC_LED_DRIVER_APP_SCHEDULE_H

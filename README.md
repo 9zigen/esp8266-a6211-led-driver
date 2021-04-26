@@ -15,3 +15,13 @@ Project [log](https://hackaday.io/project/165103-wifi-constant-current-led-drive
   - LED
   - MQTT
   - Schedule
+
+
+  ### OTA Update
+
+  ### 2 stage for 1mb flash (esp07)
+  - 1st stage
+  python espota.py -d -i 192.168.2.46 -f .pio/build/5ch-esp07-1st-stage-ota/firmware.bin
+
+  - 2nd stage 
+  python espota.py -d -i 192.168.2.46 -f .pio/build/5ch-esp07-2nd-stage-ota/firmware.bin

@@ -10,12 +10,15 @@
 #include "webui.h"
 #include "led.h"
 #include "Ticker.h"
+#include <DNSServer.h>
+#include <ESP8266mDNS.h>
 #include "Network.h"
 #include "mqtt.h"
 
 #define NTP_TIMEOUT 1500
 
 ESP8266WiFiMulti wifiMulti;
+DNSServer dnsServer;
 Ticker reconnect_timer;
 WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
 NTPSyncEvent_t ntpEvent;
@@ -50,11 +53,21 @@ void onSTAGotIP(const WiFiEventStationModeGotIP& event) {
   NETWORK.isConnected = true;
   NETWORK.stopAP();
 
+  WiFi.hostname(CONFIG.getHostname());
+
+  /* MDNS Setup */
+  MDNS.begin(CONFIG.getHostname());
+  MDNS.addService("http", "tcp", 80);
+  MDNS.addServiceTxt("light", "tcp", "model", "5ch-esp8266");
+
   /* NTP Connect */
   NETWORK.startNtp = true;
 
+#ifndef OTA_ONLY
   /* MQTT Connect */
   connectToMqtt();
+#endif
+
 }
 
 void onSTADisconnect(const WiFiEventStationModeDisconnected& event) {
@@ -83,7 +96,6 @@ void NetworkClass::init() {
     ntpEvent = event;
     ntpSyncEventTriggered = true;
   });
-
 }
 
 void NetworkClass::reloadSettings() {
@@ -94,6 +106,13 @@ void NetworkClass::reloadSettings() {
 
 /* check WiFi connection in loop */
 void NetworkClass::loop() {
+
+  if (isConnected) {
+    /* Allow MDNS processing */
+    MDNS.update();
+  } else {
+    dnsServer.processNextRequest();
+  }
 
   if (startNtp) {
     /* Setup NTP */
@@ -119,7 +138,9 @@ void NetworkClass::loop() {
   if (new_mqtt_settings) {
     new_mqtt_settings = false;
     LOG_NETWORK("[NETWORK] MQTT New Settings Applied, connecting to Server...\n");
+#ifndef OTA_ONLY
     initMqtt();
+#endif
   }
 
   /* reconnect to AP requested */
@@ -135,10 +156,10 @@ void NetworkClass::loop() {
 
     LOG_NETWORK("[NETWORK] WiFi Connect Timeout. WiFi Mode: %d \n", WiFi.getMode());
 
-    if (WiFi.getMode() != WIFI_AP) {
-      /* start AP */
-      startAP();
-    }
+     if (WiFi.getMode() != WIFI_AP) {
+       /* start AP */
+       startAP();
+     }
   } else {
     /* Wait 2 sec to repeat check state */
     connection_timer.once(2, std::bind(&NetworkClass::tik, this));
@@ -196,7 +217,18 @@ void NetworkClass::startAP() {
   /* Start AP */
   WiFi.softAP(services->hostname, auth->password);
   LOG_NETWORK("[NETWORK] AP Started with name: %s and password: %s \n", services->hostname, auth->password);
-  //LOG_NETWORK("[NETWORK] AP IP address: %s \n", WiFi.softAPIP().c_str());
+
+  /* Captive Portal */
+  delay(500);
+
+  /* Setup the DNS server redirecting all the domains to the apIP */
+  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  dnsServer.start(53, "*", WiFi.softAPIP());
+
+  /* MDNS Notify */
+  if (MDNS.isRunning()) {
+    MDNS.notifyAPChange();
+  }
 }
 
 void NetworkClass::stopAP() {
@@ -205,6 +237,14 @@ void NetworkClass::stopAP() {
   WiFi.softAPdisconnect(false);
   WiFi.mode(WIFI_STA);
   LOG_NETWORK("[NETWORK] Disabling AP. WiFi Mode: %d \n", WiFi.getMode());
+
+  /* Captive Portal */
+  dnsServer.stop();
+
+  /* MDNS Notify */
+  if (MDNS.isRunning()) {
+    MDNS.notifyAPChange();
+  }
 }
 
 NetworkClass NETWORK;

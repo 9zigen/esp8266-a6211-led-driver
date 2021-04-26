@@ -2,6 +2,8 @@
 ** Created by Aleksey Volkov on 2019-04-04.
 ***/
 
+#ifndef OTA_ONLY
+
 #include "AsyncWebSocket.h"
 #include "Arduino.h"
 #include <functional>
@@ -10,7 +12,7 @@
 #include "ArduinoJson.h"
 #include "settings.h"
 #include "webui.h"
-#include "schedule.h"
+#include "app_schedule.h"
 #include "webpage.h"
 #include "Network.h"
 #include "status.h"
@@ -461,6 +463,13 @@ void WEBUIClass::init(AsyncWebServer& server) {
     request->send(response);
   });
 
+  /* Captive portal */
+  server.onNotFound([](AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", HTML, HTML_SIZE);
+    response->addHeader("Content-Encoding", "gzip");
+    request->send(response);
+  });
+
   server.addHandler(schedule_handler);
   server.addHandler(leds_handler);
   server.addHandler(services_handler);
@@ -506,3 +515,5 @@ void WEBUIClass::stringToIP(const char *ip_string, uint8_t *octets) {
 }
 
 WEBUIClass WEBUI;
+
+#endif

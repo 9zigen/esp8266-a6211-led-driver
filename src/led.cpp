@@ -3,6 +3,7 @@
 ***/
 
 #include "Arduino.h"
+#include "Schedule.h"
 #include "Ticker.h"
 #include "settings.h"
 #include "led.h"

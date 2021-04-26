@@ -1,6 +1,7 @@
 /***
 ** Created by Aleksey Volkov on 2019-04-11.
 ***/
+#ifndef OTA_ONLY
 
 #include "Arduino.h"
 #include "Ticker.h"
@@ -8,7 +9,7 @@
 #include <NtpClientLib.h>
 #include "settings.h"
 #include "mqtt.h"
-#include "schedule.h"
+#include "app_schedule.h"
 
 #define PWM_CHANNEL_NUM_MAX MAX_LED_CHANNELS
 extern "C" {
@@ -299,3 +300,5 @@ uint32_t ScheduleClass::toPWM(uint8_t value) {
 }
 
 ScheduleClass SCHEDULE;
+
+#endif
